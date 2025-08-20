@@ -1,9 +1,9 @@
+import { config } from './config/index.js';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+// import dotenv from 'dotenv';
 import { Database } from './config/database.js';
 import { logger, httpLogger } from './config/logger.js';
-import { config } from './config/index.js';
 import apiRoutes from './routes/index.js';
 import {
   securityHeaders,
@@ -16,7 +16,7 @@ import {
 } from './middleware/security.js';
 
 // Load environment variables
-dotenv.config();
+// dotenv.config();
 
 class EmailClientServer {
   app;

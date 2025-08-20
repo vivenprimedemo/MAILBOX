@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 export const config = {
   // Server configuration
   PORT: parseInt(process.env.PORT || '3000'),
@@ -5,6 +8,7 @@ export const config = {
   
   // Database configuration
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/email_client',
+  DB_NAME: process.env.DB_NAME || 'imap_client',
   
   // JWT configuration
   JWT_SECRET: process.env.JWT_SECRET,
