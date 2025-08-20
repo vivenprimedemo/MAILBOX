@@ -1,0 +1,5 @@
+nodemodule
+.env
+.env.example
+logs
+
