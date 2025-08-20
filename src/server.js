@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { Database } from './config/database.js';
 import { logger, httpLogger } from './config/logger.js';
+import { config } from './config/index.js';
 import apiRoutes from './routes/index.js';
 import {
   securityHeaders,
@@ -24,7 +25,7 @@ class EmailClientServer {
 
   constructor() {
     this.app = express();
-    this.port = parseInt(process.env.PORT || '3000');
+    this.port = config.PORT;
     this.database = Database.getInstance();
     
     this.initializeMiddleware();
@@ -108,7 +109,7 @@ class EmailClientServer {
       });
 
       // Don't leak error details in production
-      const isDevelopment = process.env.NODE_ENV === 'development';
+      const isDevelopment = config.NODE_ENV === 'development';
       
       res.status(500).json({
         success: false,
@@ -169,12 +170,12 @@ class EmailClientServer {
       this.app.listen(this.port, () => {
         logger.info(`Email Client Server is running on port ${this.port}`, {
           port: this.port,
-          environment: process.env.NODE_ENV || 'development',
+          environment: config.NODE_ENV,
           nodeVersion: process.version,
           pid: process.pid
         });
 
-        if (process.env.NODE_ENV === 'development') {
+        if (config.NODE_ENV === 'development') {
           console.log(`\n🚀 Server running at:`);
           console.log(`   Local:    http://localhost:${this.port}`);
           console.log(`   API:      http://localhost:${this.port}/api`);

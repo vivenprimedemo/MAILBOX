@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { logger } from './logger.js';
+import { config } from './index.js';
 
 export class Database {
   static instance;
@@ -20,7 +21,7 @@ export class Database {
     }
 
     try {
-      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/email_client';
+      const mongoUri = config.MONGODB_URI;
       
       mongoose.set('strictQuery', false);
       

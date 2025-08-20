@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
+import { config } from '../config/index.js';
 
 export class AuthService {
-  static JWT_SECRET = process.env.JWT_SECRET;
-  static JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+  static JWT_SECRET = config.JWT_SECRET;
+  static JWT_EXPIRES_IN = config.JWT_EXPIRES_IN;
 
   static async register(userData) {
     // Check if user already exists

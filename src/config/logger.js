@@ -1,8 +1,9 @@
 import winston from 'winston';
 import path from 'path';
+import { config } from './index.js';
 
 const logDir = 'logs';
-const logLevel = process.env.LOG_LEVEL || 'info';
+const logLevel = config.LOG_LEVEL;
 
 // Define log format
 const logFormat = winston.format.combine(
@@ -48,7 +49,7 @@ export const logger = winston.createLogger({
     }),
 
     // Write all logs to console if not in production
-    ...(process.env.NODE_ENV !== 'production' 
+    ...(config.NODE_ENV !== 'production' 
       ? [new winston.transports.Console({
           format: winston.format.combine(
             winston.format.colorize(),

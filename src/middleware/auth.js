@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
+import { config } from '../config/index.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
@@ -13,7 +14,7 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     
     const user = await User.findOne({ id: decoded.userId, isActive: true });
     if (!user) {
@@ -50,7 +51,7 @@ export const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     const user = await User.findOne({ id: decoded.userId, isActive: true });
     
     if (user) {
