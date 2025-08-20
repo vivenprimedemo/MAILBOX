@@ -1,8 +1,10 @@
-import { Router } from 'express';
-import { EmailController } from '../controllers/EmailController';
-import { authenticateToken, requireEmailAccount } from '../middleware/auth';
-import { validate, validateQuery, schemas } from '../middleware/validation';
-import { emailSendLimiter } from '../middleware/security';
+import express from 'express';
+import { EmailController } from '../controllers/EmailController.js';
+import { authenticateToken, requireEmailAccount } from '../middleware/auth.js';
+import { validate, validateQuery, schemas } from '../middleware/validation.js';
+import { emailSendLimiter } from '../middleware/security.js';
+
+const { Router } = express;
 
 const router = Router();
 

@@ -1,19 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
-import { IUser, IEmailAccount } from '../interfaces/IUser';
+import { User } from '../models/User.js';
 
 export class AuthService {
-  private static readonly JWT_SECRET = process.env.JWT_SECRET!;
-  private static readonly JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+  static JWT_SECRET = process.env.JWT_SECRET;
+  static JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-  static async register(userData: {
-    username: string;
-    email: string;
-    password: string;
-    firstName?: string;
-    lastName?: string;
-  }): Promise<{ user: IUser; token: string }> {
+  static async register(userData) {
     // Check if user already exists
     const existingUser = await User.findOne({
       $or: [{ username: userData.username }, { email: userData.email }]
@@ -57,7 +50,7 @@ export class AuthService {
     return { user: user.toObject(), token };
   }
 
-  static async login(username: string, password: string): Promise<{ user: IUser; token: string }> {
+  static async login(username, password) {
     // Find user
     const user = await User.findOne({
       $or: [{ username }, { email: username }],
@@ -84,9 +77,9 @@ export class AuthService {
     return { user: user.toObject(), token };
   }
 
-  static async refreshToken(oldToken: string): Promise<{ token: string }> {
+  static async refreshToken(oldToken) {
     try {
-      const decoded = jwt.verify(oldToken, this.JWT_SECRET) as any;
+      const decoded = jwt.verify(oldToken, this.JWT_SECRET);
       
       const user = await User.findOne({ id: decoded.userId, isActive: true });
       if (!user) {
@@ -100,18 +93,18 @@ export class AuthService {
     }
   }
 
-  static async getUserById(userId: string): Promise<IUser | null> {
+  static async getUserById(userId) {
     const user = await User.findOne({ id: userId, isActive: true });
     return user ? user.toObject() : null;
   }
 
-  static async updateUser(userId: string, updateData: Partial<IUser>): Promise<IUser | null> {
+  static async updateUser(userId, updateData) {
     const allowedUpdates = ['firstName', 'lastName', 'preferences'];
-    const updates: any = {};
+    const updates = {};
 
     Object.keys(updateData).forEach(key => {
       if (allowedUpdates.includes(key)) {
-        updates[key] = updateData[key as keyof IUser];
+        updates[key] = updateData[key];
       }
     });
 
@@ -126,7 +119,7 @@ export class AuthService {
     return user ? user.toObject() : null;
   }
 
-  static async updatePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  static async updatePassword(userId, currentPassword, newPassword) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       throw new Error('User not found');
@@ -148,7 +141,7 @@ export class AuthService {
     await user.save();
   }
 
-  static async deactivateUser(userId: string): Promise<void> {
+  static async deactivateUser(userId) {
     await User.findOneAndUpdate(
       { id: userId },
       { 
@@ -161,10 +154,7 @@ export class AuthService {
   }
 
   // Email Account Management
-  static async addEmailAccount(
-    userId: string, 
-    accountData: Omit<IEmailAccount, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<IEmailAccount> {
+  static async addEmailAccount(userId, accountData) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       throw new Error('User not found');
@@ -172,7 +162,7 @@ export class AuthService {
 
     // Check if email account already exists
     const existingAccount = user.emailAccounts.find(
-      (account: IEmailAccount) => account.email === accountData.email
+      (account) => account.email === accountData.email
     );
 
     if (existingAccount) {
@@ -185,18 +175,14 @@ export class AuthService {
     return newAccount;
   }
 
-  static async updateEmailAccount(
-    userId: string, 
-    accountId: string, 
-    updateData: Partial<IEmailAccount>
-  ): Promise<IEmailAccount | null> {
+  static async updateEmailAccount(userId, accountId, updateData) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       throw new Error('User not found');
     }
 
     const accountIndex = user.emailAccounts.findIndex(
-      (account: IEmailAccount) => account.id === accountId
+      (account) => account.id === accountId
     );
 
     if (accountIndex === -1) {
@@ -205,8 +191,8 @@ export class AuthService {
 
     const allowedUpdates = ['displayName', 'isActive', 'config'];
     Object.keys(updateData).forEach(key => {
-      if (allowedUpdates.includes(key) && updateData[key as keyof IEmailAccount] !== undefined) {
-        (user.emailAccounts[accountIndex] as any)[key] = updateData[key as keyof IEmailAccount];
+      if (allowedUpdates.includes(key) && updateData[key] !== undefined) {
+        user.emailAccounts[accountIndex][key] = updateData[key];
       }
     });
 
@@ -218,7 +204,7 @@ export class AuthService {
     return user.emailAccounts[accountIndex];
   }
 
-  static async removeEmailAccount(userId: string, accountId: string): Promise<void> {
+  static async removeEmailAccount(userId, accountId) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       throw new Error('User not found');
@@ -229,16 +215,16 @@ export class AuthService {
     await user.save();
   }
 
-  static async getEmailAccounts(userId: string): Promise<IEmailAccount[]> {
+  static async getEmailAccounts(userId) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       throw new Error('User not found');
     }
 
-    return user.emailAccounts.filter((account: IEmailAccount) => account.isActive);
+    return user.emailAccounts.filter((account) => account.isActive);
   }
 
-  static async getEmailAccount(userId: string, accountId: string): Promise<IEmailAccount | null> {
+  static async getEmailAccount(userId, accountId) {
     const user = await User.findOne({ id: userId, isActive: true });
     if (!user) {
       return null;
@@ -247,7 +233,7 @@ export class AuthService {
     return user.getEmailAccount(accountId) || null;
   }
 
-  private static generateToken(userId: string): string {
+  static generateToken(userId) {
     return jwt.sign(
       { userId, type: 'access' },
       this.JWT_SECRET,
@@ -255,21 +241,21 @@ export class AuthService {
     );
   }
 
-  private static generateUserId(): string {
+  static generateUserId() {
     return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   // Utility methods for token validation
-  static verifyToken(token: string): { userId: string; type: string } | null {
+  static verifyToken(token) {
     try {
-      const decoded = jwt.verify(token, this.JWT_SECRET) as any;
+      const decoded = jwt.verify(token, this.JWT_SECRET);
       return { userId: decoded.userId, type: decoded.type };
     } catch (error) {
       return null;
     }
   }
 
-  static async validateUserSession(token: string): Promise<IUser | null> {
+  static async validateUserSession(token) {
     const decoded = this.verifyToken(token);
     if (!decoded) {
       return null;

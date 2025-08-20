@@ -1,12 +1,11 @@
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth';
-import { EmailService } from '../services/EmailService';
-import { AuthService } from '../services/AuthService';
+// Import dependencies
+import { EmailService } from '../services/EmailService.js';
+import { AuthService } from '../services/AuthService.js';
 
 export class EmailController {
-  private static emailService = new EmailService();
+  static emailService = new EmailService();
 
-  static async getFolders(req: AuthRequest, res: Response): Promise<void> {
+  static async getFolders(req, res) {
     try {
       const { accountId } = req.params;
 
@@ -24,17 +23,17 @@ export class EmailController {
     }
   }
 
-  static async getEmails(req: AuthRequest, res: Response): Promise<void> {
+  static async getEmails(req, res) {
     try {
       const { accountId, folder } = req.params;
       const { limit, offset, useCache } = req.query;
 
       const emails = await EmailController.emailService.getEmails(
         accountId,
-        req.userId!,
+        req.userId,
         folder,
-        limit ? parseInt(limit as string) : undefined,
-        offset ? parseInt(offset as string) : undefined,
+        limit ? parseInt(limit) : undefined,
+        offset ? parseInt(offset) : undefined,
         useCache !== 'false'
       );
 
@@ -50,7 +49,7 @@ export class EmailController {
     }
   }
 
-  static async getEmail(req: AuthRequest, res: Response): Promise<void> {
+  static async getEmail(req, res) {
     try {
       const { accountId, messageId } = req.params;
       const { folder } = req.query;
@@ -58,7 +57,7 @@ export class EmailController {
       const email = await EmailController.emailService.getEmail(
         accountId, 
         messageId, 
-        folder as string
+        folder
       );
 
       if (!email) {
@@ -81,17 +80,17 @@ export class EmailController {
     }
   }
 
-  static async getThreads(req: AuthRequest, res: Response): Promise<void> {
+  static async getThreads(req, res) {
     try {
       const { accountId, folder } = req.params;
       const { limit, offset } = req.query;
 
       const threads = await EmailController.emailService.getThreads(
         accountId,
-        req.userId!,
+        req.userId,
         folder,
-        limit ? parseInt(limit as string) : undefined,
-        offset ? parseInt(offset as string) : undefined
+        limit ? parseInt(limit) : undefined,
+        offset ? parseInt(offset) : undefined
       );
 
       res.json({
@@ -106,7 +105,7 @@ export class EmailController {
     }
   }
 
-  static async getThread(req: AuthRequest, res: Response): Promise<void> {
+  static async getThread(req, res) {
     try {
       const { accountId, threadId } = req.params;
 
@@ -132,7 +131,7 @@ export class EmailController {
     }
   }
 
-  static async searchEmails(req: AuthRequest, res: Response): Promise<void> {
+  static async searchEmails(req, res) {
     try {
       const { accountId } = req.params;
       const searchQuery = req.query;
@@ -140,8 +139,8 @@ export class EmailController {
       // Convert date strings to Date objects
       if (searchQuery.dateStart) {
         searchQuery.dateRange = {
-          start: new Date(searchQuery.dateStart as string),
-          end: searchQuery.dateEnd ? new Date(searchQuery.dateEnd as string) : new Date()
+          start: new Date(searchQuery.dateStart),
+          end: searchQuery.dateEnd ? new Date(searchQuery.dateEnd) : new Date()
         };
         delete searchQuery.dateStart;
         delete searchQuery.dateEnd;
@@ -149,8 +148,8 @@ export class EmailController {
 
       const emails = await EmailController.emailService.searchEmails(
         accountId,
-        req.userId!,
-        searchQuery as any
+        req.userId,
+        searchQuery
       );
 
       res.json({
@@ -165,7 +164,7 @@ export class EmailController {
     }
   }
 
-  static async markAsRead(req: AuthRequest, res: Response): Promise<void> {
+  static async markAsRead(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
@@ -184,7 +183,7 @@ export class EmailController {
     }
   }
 
-  static async markAsUnread(req: AuthRequest, res: Response): Promise<void> {
+  static async markAsUnread(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
@@ -203,7 +202,7 @@ export class EmailController {
     }
   }
 
-  static async markAsFlagged(req: AuthRequest, res: Response): Promise<void> {
+  static async markAsFlagged(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
@@ -222,7 +221,7 @@ export class EmailController {
     }
   }
 
-  static async markAsUnflagged(req: AuthRequest, res: Response): Promise<void> {
+  static async markAsUnflagged(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
@@ -241,7 +240,7 @@ export class EmailController {
     }
   }
 
-  static async deleteEmails(req: AuthRequest, res: Response): Promise<void> {
+  static async deleteEmails(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
@@ -260,7 +259,7 @@ export class EmailController {
     }
   }
 
-  static async moveEmails(req: AuthRequest, res: Response): Promise<void> {
+  static async moveEmails(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, fromFolder, toFolder } = req.body;
@@ -279,7 +278,7 @@ export class EmailController {
     }
   }
 
-  static async sendEmail(req: AuthRequest, res: Response): Promise<void> {
+  static async sendEmail(req, res) {
     try {
       const { accountId } = req.params;
       const emailOptions = req.body;
@@ -299,7 +298,7 @@ export class EmailController {
     }
   }
 
-  static async replyToEmail(req: AuthRequest, res: Response): Promise<void> {
+  static async replyToEmail(req, res) {
     try {
       const { accountId, messageId } = req.params;
       const replyOptions = req.body;
@@ -323,7 +322,7 @@ export class EmailController {
     }
   }
 
-  static async forwardEmail(req: AuthRequest, res: Response): Promise<void> {
+  static async forwardEmail(req, res) {
     try {
       const { accountId, messageId } = req.params;
       const { to, message } = req.body;
@@ -348,11 +347,11 @@ export class EmailController {
     }
   }
 
-  static async syncAccount(req: AuthRequest, res: Response): Promise<void> {
+  static async syncAccount(req, res) {
     try {
       const { accountId } = req.params;
 
-      await EmailController.emailService.syncAccount(accountId, req.userId!);
+      await EmailController.emailService.syncAccount(accountId, req.userId);
 
       res.json({
         success: true,
@@ -367,9 +366,9 @@ export class EmailController {
   }
 
   // Email Account Management
-  static async getEmailAccounts(req: AuthRequest, res: Response): Promise<void> {
+  static async getEmailAccounts(req, res) {
     try {
-      const accounts = await AuthService.getEmailAccounts(req.userId!);
+      const accounts = await AuthService.getEmailAccounts(req.userId);
 
       res.json({
         success: true,
@@ -383,11 +382,11 @@ export class EmailController {
     }
   }
 
-  static async addEmailAccount(req: AuthRequest, res: Response): Promise<void> {
+  static async addEmailAccount(req, res) {
     try {
       const accountData = req.body;
 
-      const newAccount = await AuthService.addEmailAccount(req.userId!, accountData);
+      const newAccount = await AuthService.addEmailAccount(req.userId, accountData);
 
       // Try to connect to the email provider
       const connected = await EmailController.emailService.connectProvider(
@@ -397,7 +396,7 @@ export class EmailController {
 
       if (!connected) {
         // Remove the account if connection failed
-        await AuthService.removeEmailAccount(req.userId!, newAccount.id);
+        await AuthService.removeEmailAccount(req.userId, newAccount.id);
         
         res.status(400).json({
           success: false,
@@ -419,13 +418,13 @@ export class EmailController {
     }
   }
 
-  static async updateEmailAccount(req: AuthRequest, res: Response): Promise<void> {
+  static async updateEmailAccount(req, res) {
     try {
       const { accountId } = req.params;
       const updateData = req.body;
 
       const updatedAccount = await AuthService.updateEmailAccount(
-        req.userId!, 
+        req.userId, 
         accountId, 
         updateData
       );
@@ -451,7 +450,7 @@ export class EmailController {
     }
   }
 
-  static async removeEmailAccount(req: AuthRequest, res: Response): Promise<void> {
+  static async removeEmailAccount(req, res) {
     try {
       const { accountId } = req.params;
 
@@ -459,7 +458,7 @@ export class EmailController {
       await EmailController.emailService.removeProvider(accountId);
 
       // Remove account from user
-      await AuthService.removeEmailAccount(req.userId!, accountId);
+      await AuthService.removeEmailAccount(req.userId, accountId);
 
       res.json({
         success: true,

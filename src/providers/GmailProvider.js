@@ -1,22 +1,13 @@
-import { BaseEmailProvider } from './BaseEmailProvider';
-import { 
-  IEmailProviderCapabilities, 
-  ISendEmailOptions,
-  IEmailProviderConfig 
-} from '../interfaces/IEmailProvider';
-import { IEmail, IFolder, IEmailSearchQuery, IEmailThread, IEmailAddress } from '../interfaces/IEmail';
+import { BaseEmailProvider } from './BaseEmailProvider.js';
 
 export class GmailProvider extends BaseEmailProvider {
-  private accessToken?: string;
-  private refreshToken?: string;
-
-  constructor(config: IEmailProviderConfig) {
+  constructor(config) {
     super(config);
     this.accessToken = config.auth.accessToken;
     this.refreshToken = config.auth.refreshToken;
   }
 
-  getCapabilities(): IEmailProviderCapabilities {
+  getCapabilities() {
     return {
       supportsThreading: true,
       supportsLabels: true,
@@ -29,7 +20,7 @@ export class GmailProvider extends BaseEmailProvider {
     };
   }
 
-  async connect(): Promise<void> {
+  async connect() {
     if (!this.accessToken) {
       throw new Error('Access token required for Gmail');
     }
@@ -48,12 +39,12 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  async disconnect(): Promise<void> {
+  async disconnect() {
     this.isConnected = false;
     this.accessToken = undefined;
   }
 
-  async authenticate(credentials?: any): Promise<boolean> {
+  async authenticate(credentials) {
     try {
       if (credentials?.accessToken) {
         this.accessToken = credentials.accessToken;
@@ -66,7 +57,7 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  private async refreshAccessToken(): Promise<void> {
+  async refreshAccessToken() {
     if (!this.refreshToken || !this.config.auth.clientId || !this.config.auth.clientSecret) {
       throw new Error('Refresh token or OAuth credentials missing');
     }
@@ -90,7 +81,7 @@ export class GmailProvider extends BaseEmailProvider {
     this.accessToken = data.access_token;
   }
 
-  private async makeGmailRequest(url: string, options: RequestInit = {}): Promise<any> {
+  async makeGmailRequest(url, options = {}) {
     if (!this.accessToken) {
       throw new Error('Not authenticated');
     }
@@ -116,10 +107,10 @@ export class GmailProvider extends BaseEmailProvider {
     return response.json();
   }
 
-  async getFolders(): Promise<IFolder[]> {
+  async getFolders() {
     const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
     
-    return data.labels.map((label: any) => ({
+    return data.labels.map((label) => ({
       name: label.id,
       displayName: label.name,
       type: this.mapLabelType(label.id),
@@ -128,7 +119,7 @@ export class GmailProvider extends BaseEmailProvider {
     }));
   }
 
-  private mapLabelType(labelId: string): IFolder['type'] {
+  mapLabelType(labelId) {
     switch (labelId.toUpperCase()) {
       case 'INBOX': return 'inbox';
       case 'SENT': return 'sent';
@@ -139,7 +130,7 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  async getEmails(folder: string, limit: number = 50, offset: number = 0): Promise<IEmail[]> {
+  async getEmails(folder, limit = 50, offset = 0) {
     let query = `in:${folder}`;
     const params = new URLSearchParams({
       maxResults: limit.toString(),
@@ -150,15 +141,15 @@ export class GmailProvider extends BaseEmailProvider {
     
     if (!data.messages) return [];
 
-    const emailPromises = data.messages.map((message: any) =>
+    const emailPromises = data.messages.map((message) =>
       this.getEmail(message.id, folder)
     );
 
     const emails = await Promise.all(emailPromises);
-    return emails.filter(email => email !== null) as IEmail[];
+    return emails.filter(email => email !== null);
   }
 
-  async getEmail(messageId: string, folder?: string): Promise<IEmail | null> {
+  async getEmail(messageId, folder) {
     try {
       const data = await this.makeGmailRequest(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`
@@ -170,9 +161,9 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  private parseGmailMessage(message: any, folder?: string): IEmail {
+  parseGmailMessage(message, folder) {
     const headers = message.payload.headers;
-    const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value;
+    const getHeader = (name) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
 
     return {
       id: message.id,
@@ -203,7 +194,7 @@ export class GmailProvider extends BaseEmailProvider {
     };
   }
 
-  private parseGmailAddress(addressStr?: string): IEmailAddress {
+  parseGmailAddress(addressStr) {
     if (!addressStr) return { address: '' };
     
     const match = addressStr.match(/^(.+?)\s*<(.+)>$/) || addressStr.match(/^(.+)$/);
@@ -219,13 +210,13 @@ export class GmailProvider extends BaseEmailProvider {
     return { address: match[1].trim() };
   }
 
-  private parseGmailAddresses(addressStr?: string): IEmailAddress[] {
+  parseGmailAddresses(addressStr) {
     if (!addressStr) return [];
     
     return addressStr.split(',').map(addr => this.parseGmailAddress(addr.trim()));
   }
 
-  private extractTextFromPayload(payload: any, mimeType: string): string {
+  extractTextFromPayload(payload, mimeType) {
     if (payload.mimeType === mimeType && payload.body?.data) {
       return Buffer.from(payload.body.data, 'base64').toString('utf-8');
     }
@@ -240,10 +231,10 @@ export class GmailProvider extends BaseEmailProvider {
     return '';
   }
 
-  private extractAttachmentsFromPayload(payload: any): any[] {
-    const attachments: any[] = [];
+  extractAttachmentsFromPayload(payload) {
+    const attachments = [];
     
-    const extractFromPart = (part: any) => {
+    const extractFromPart = (part) => {
       if (part.filename && part.body?.attachmentId) {
         attachments.push({
           filename: part.filename,
@@ -265,13 +256,13 @@ export class GmailProvider extends BaseEmailProvider {
     return attachments;
   }
 
-  async getThread(threadId: string): Promise<IEmailThread | null> {
+  async getThread(threadId) {
     try {
       const data = await this.makeGmailRequest(
         `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`
       );
       
-      const emails = data.messages.map((message: any) => this.parseGmailMessage(message));
+      const emails = data.messages.map((message) => this.parseGmailMessage(message));
       if (emails.length === 0) return null;
       
       const threads = this.buildThreads(emails);
@@ -281,12 +272,12 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  async getThreads(folder: string, limit?: number, offset?: number): Promise<IEmailThread[]> {
+  async getThreads(folder, limit, offset) {
     const emails = await this.getEmails(folder, limit, offset);
     return this.buildThreads(emails);
   }
 
-  async searchEmails(query: IEmailSearchQuery): Promise<IEmail[]> {
+  async searchEmails(query) {
     let searchQuery = query.query || '';
     
     if (query.from) searchQuery += ` from:${query.from}`;
@@ -306,36 +297,36 @@ export class GmailProvider extends BaseEmailProvider {
     
     if (!data.messages) return [];
 
-    const emailPromises = data.messages.map((message: any) =>
+    const emailPromises = data.messages.map((message) =>
       this.getEmail(message.id)
     );
 
     const emails = await Promise.all(emailPromises);
-    return emails.filter(email => email !== null) as IEmail[];
+    return emails.filter(email => email !== null);
   }
 
-  async searchThreads(query: IEmailSearchQuery): Promise<IEmailThread[]> {
+  async searchThreads(query) {
     const emails = await this.searchEmails(query);
     return this.buildThreads(emails);
   }
 
-  async markAsRead(messageIds: string[], folder?: string): Promise<void> {
+  async markAsRead(messageIds, folder) {
     await this.updateLabels(messageIds, [], ['UNREAD']);
   }
 
-  async markAsUnread(messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnread(messageIds, folder) {
     await this.updateLabels(messageIds, ['UNREAD'], []);
   }
 
-  async markAsFlagged(messageIds: string[], folder?: string): Promise<void> {
+  async markAsFlagged(messageIds, folder) {
     await this.updateLabels(messageIds, ['STARRED'], []);
   }
 
-  async markAsUnflagged(messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnflagged(messageIds, folder) {
     await this.updateLabels(messageIds, [], ['STARRED']);
   }
 
-  private async updateLabels(messageIds: string[], addLabelIds: string[], removeLabelIds: string[]): Promise<void> {
+  async updateLabels(messageIds, addLabelIds, removeLabelIds) {
     const batchRequest = {
       ids: messageIds,
       addLabelIds,
@@ -348,7 +339,7 @@ export class GmailProvider extends BaseEmailProvider {
     });
   }
 
-  async deleteEmails(messageIds: string[], folder?: string): Promise<void> {
+  async deleteEmails(messageIds, folder) {
     const batchRequest = { ids: messageIds };
     
     await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchDelete', {
@@ -357,11 +348,11 @@ export class GmailProvider extends BaseEmailProvider {
     });
   }
 
-  async moveEmails(messageIds: string[], fromFolder: string, toFolder: string): Promise<void> {
+  async moveEmails(messageIds, fromFolder, toFolder) {
     await this.updateLabels(messageIds, [toFolder], [fromFolder]);
   }
 
-  async sendEmail(options: ISendEmailOptions): Promise<string> {
+  async sendEmail(options) {
     const email = this.buildMimeMessage(options);
     const encodedEmail = Buffer.from(email).toString('base64url');
 
@@ -373,7 +364,7 @@ export class GmailProvider extends BaseEmailProvider {
     return data.id;
   }
 
-  private buildMimeMessage(options: ISendEmailOptions): string {
+  buildMimeMessage(options) {
     const boundary = `----boundary_${Date.now()}`;
     let message = '';
 
@@ -426,7 +417,7 @@ export class GmailProvider extends BaseEmailProvider {
         
         const content = Buffer.isBuffer(attachment.content) 
           ? attachment.content 
-          : Buffer.from(attachment.content as string);
+          : Buffer.from(attachment.content);
         message += content.toString('base64') + '\r\n\r\n';
       }
     }
@@ -435,7 +426,7 @@ export class GmailProvider extends BaseEmailProvider {
     return message;
   }
 
-  async replyToEmail(originalMessageId: string, options: Omit<ISendEmailOptions, 'to' | 'subject' | 'inReplyTo' | 'references'>): Promise<string> {
+  async replyToEmail(originalMessageId, options) {
     const originalEmail = await this.getEmail(originalMessageId);
     if (!originalEmail) {
       throw new Error('Original email not found');
@@ -450,7 +441,7 @@ export class GmailProvider extends BaseEmailProvider {
     });
   }
 
-  async forwardEmail(originalMessageId: string, to: IEmailAddress[], message?: string): Promise<string> {
+  async forwardEmail(originalMessageId, to, message) {
     const originalEmail = await this.getEmail(originalMessageId);
     if (!originalEmail) {
       throw new Error('Original email not found');
@@ -474,13 +465,13 @@ ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
       bodyText: forwardedContent,
       attachments: originalEmail.attachments?.map(att => ({
         filename: att.filename,
-        content: att.data!,
+        content: att.data,
         contentType: att.contentType
       }))
     });
   }
 
-  async sync(folder?: string): Promise<void> {
+  async sync(folder) {
     // Gmail doesn't support IDLE, but we can implement polling
     // This would typically be handled by webhooks in a production environment
     console.log(`Sync not implemented for Gmail - use webhooks for real-time updates`);

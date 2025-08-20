@@ -1,9 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Database } from './config/database';
-import { logger, httpLogger } from './config/logger';
-import apiRoutes from './routes/index';
+import { Database } from './config/database.js';
+import { logger, httpLogger } from './config/logger.js';
+import apiRoutes from './routes/index.js';
 import {
   securityHeaders,
   generalLimiter,
@@ -12,15 +12,15 @@ import {
   corsOptions,
   securityErrorHandler,
   securityLogger
-} from './middleware/security';
+} from './middleware/security.js';
 
 // Load environment variables
 dotenv.config();
 
 class EmailClientServer {
-  private app: express.Application;
-  private port: number;
-  private database: Database;
+  app;
+  port;
+  database;
 
   constructor() {
     this.app = express();
@@ -32,7 +32,7 @@ class EmailClientServer {
     this.initializeErrorHandling();
   }
 
-  private initializeMiddleware(): void {
+  initializeMiddleware() {
     // Security middleware
     this.app.use(securityHeaders);
     this.app.use(securityLogger);
@@ -60,7 +60,7 @@ class EmailClientServer {
     });
   }
 
-  private initializeRoutes(): void {
+  initializeRoutes() {
     // Root endpoint
     this.app.get('/', (req, res) => {
       res.json({
@@ -92,12 +92,12 @@ class EmailClientServer {
     });
   }
 
-  private initializeErrorHandling(): void {
+  initializeErrorHandling() {
     // Security error handler
     this.app.use(securityErrorHandler);
 
     // Global error handler
-    this.app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    this.app.use((err, req, res, next) => {
       logger.error('Unhandled error:', {
         error: err.message,
         stack: err.stack,
@@ -144,7 +144,7 @@ class EmailClientServer {
     });
   }
 
-  private sanitizeLogData(data: any): any {
+  sanitizeLogData(data) {
     if (!data) return data;
     
     const sensitiveFields = ['password', 'token', 'accessToken', 'refreshToken', 'secret'];
@@ -159,7 +159,7 @@ class EmailClientServer {
     return sanitized;
   }
 
-  public async start(): Promise<void> {
+  async start() {
     try {
       // Connect to database
       await this.database.connect();
@@ -194,7 +194,7 @@ class EmailClientServer {
     }
   }
 
-  private async gracefulShutdown(): Promise<void> {
+  async gracefulShutdown() {
     logger.info('Starting graceful shutdown...');
 
     try {
@@ -213,7 +213,7 @@ class EmailClientServer {
 }
 
 // Start server if this file is run directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const server = new EmailClientServer();
   server.start().catch((error) => {
     console.error('Failed to start server:', error);

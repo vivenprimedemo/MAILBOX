@@ -1,18 +1,15 @@
-import { IEmailProvider, IEmailProviderConfig } from '../interfaces/IEmailProvider';
-import { IEmail, IEmailThread, IFolder, IEmailSearchQuery, IEmailAddress } from '../interfaces/IEmail';
-import { ISendEmailOptions } from '../interfaces/IEmailProvider';
-import { GmailProvider } from '../providers/GmailProvider';
-import { IMAPProvider } from '../providers/IMAPProvider';
-import { Email } from '../models/Email';
+import { GmailProvider } from '../providers/GmailProvider.js';
+import { IMAPProvider } from '../providers/IMAPProvider.js';
+import { Email } from '../models/Email.js';
 
 export class EmailService {
-  private providers: Map<string, IEmailProvider> = new Map();
-  private providerInstances: Map<string, IEmailProvider> = new Map();
+  providers = new Map();
+  providerInstances = new Map();
 
   constructor() {}
 
-  createProvider(config: IEmailProviderConfig, accountId: string): IEmailProvider {
-    let provider: IEmailProvider;
+  createProvider(config, accountId) {
+    let provider;
 
     switch (config.type) {
       case 'gmail':
@@ -23,7 +20,7 @@ export class EmailService {
         break;
       case 'outlook':
         // Outlook can use IMAP or Graph API - implementing as IMAP for now
-        const outlookConfig: IEmailProviderConfig = {
+        const outlookConfig = {
           ...config,
           type: 'imap',
           host: 'outlook.office365.com',
@@ -40,11 +37,11 @@ export class EmailService {
     return provider;
   }
 
-  async getProvider(accountId: string): Promise<IEmailProvider | null> {
+  async getProvider(accountId) {
     return this.providerInstances.get(accountId) || null;
   }
 
-  async removeProvider(accountId: string): Promise<void> {
+  async removeProvider(accountId) {
     const provider = this.providerInstances.get(accountId);
     if (provider) {
       await provider.disconnect();
@@ -52,7 +49,7 @@ export class EmailService {
     }
   }
 
-  async connectProvider(accountId: string, config: IEmailProviderConfig): Promise<boolean> {
+  async connectProvider(accountId, config) {
     try {
       const provider = this.createProvider(config, accountId);
       await provider.connect();
@@ -63,7 +60,7 @@ export class EmailService {
     }
   }
 
-  async getFolders(accountId: string): Promise<IFolder[]> {
+  async getFolders(accountId) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -71,14 +68,7 @@ export class EmailService {
     return provider.getFolders();
   }
 
-  async getEmails(
-    accountId: string, 
-    userId: string,
-    folder: string, 
-    limit?: number, 
-    offset?: number,
-    useCache: boolean = true
-  ): Promise<IEmail[]> {
+  async getEmails(accountId, userId, folder, limit, offset, useCache = true) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -104,7 +94,7 @@ export class EmailService {
     return emails;
   }
 
-  async getEmail(accountId: string, messageId: string, folder?: string): Promise<IEmail | null> {
+  async getEmail(accountId, messageId, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -112,13 +102,7 @@ export class EmailService {
     return provider.getEmail(messageId, folder);
   }
 
-  async getThreads(
-    accountId: string, 
-    userId: string,
-    folder: string, 
-    limit?: number, 
-    offset?: number
-  ): Promise<IEmailThread[]> {
+  async getThreads(accountId, userId, folder, limit, offset) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -134,7 +118,7 @@ export class EmailService {
     return provider.getThreads(folder, limit, offset);
   }
 
-  async getThread(accountId: string, threadId: string): Promise<IEmailThread | null> {
+  async getThread(accountId, threadId) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -142,11 +126,7 @@ export class EmailService {
     return provider.getThread(threadId);
   }
 
-  async searchEmails(
-    accountId: string, 
-    userId: string,
-    query: IEmailSearchQuery
-  ): Promise<IEmail[]> {
+  async searchEmails(accountId, userId, query) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -161,7 +141,7 @@ export class EmailService {
     return provider.searchEmails(query);
   }
 
-  async markAsRead(accountId: string, messageIds: string[], folder?: string): Promise<void> {
+  async markAsRead(accountId, messageIds, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -171,7 +151,7 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { seen: true });
   }
 
-  async markAsUnread(accountId: string, messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnread(accountId, messageIds, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -181,7 +161,7 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { seen: false });
   }
 
-  async markAsFlagged(accountId: string, messageIds: string[], folder?: string): Promise<void> {
+  async markAsFlagged(accountId, messageIds, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -191,7 +171,7 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { flagged: true });
   }
 
-  async markAsUnflagged(accountId: string, messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnflagged(accountId, messageIds, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -201,7 +181,7 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { flagged: false });
   }
 
-  async deleteEmails(accountId: string, messageIds: string[], folder?: string): Promise<void> {
+  async deleteEmails(accountId, messageIds, folder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -211,7 +191,7 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { deleted: true });
   }
 
-  async moveEmails(accountId: string, messageIds: string[], fromFolder: string, toFolder: string): Promise<void> {
+  async moveEmails(accountId, messageIds, fromFolder, toFolder) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -226,7 +206,7 @@ export class EmailService {
     );
   }
 
-  async sendEmail(accountId: string, options: ISendEmailOptions): Promise<string> {
+  async sendEmail(accountId, options) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -240,11 +220,7 @@ export class EmailService {
     return provider.sendEmail(options);
   }
 
-  async replyToEmail(
-    accountId: string, 
-    originalMessageId: string, 
-    options: Omit<ISendEmailOptions, 'to' | 'subject' | 'inReplyTo' | 'references'>
-  ): Promise<string> {
+  async replyToEmail(accountId, originalMessageId, options) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -253,12 +229,7 @@ export class EmailService {
     return provider.replyToEmail(originalMessageId, options);
   }
 
-  async forwardEmail(
-    accountId: string, 
-    originalMessageId: string, 
-    to: IEmailAddress[], 
-    message?: string
-  ): Promise<string> {
+  async forwardEmail(accountId, originalMessageId, to, message) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -267,7 +238,7 @@ export class EmailService {
     return provider.forwardEmail(originalMessageId, to, message);
   }
 
-  async syncAccount(accountId: string, userId: string): Promise<void> {
+  async syncAccount(accountId, userId) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -292,7 +263,7 @@ export class EmailService {
     }
   }
 
-  private async cacheEmails(emails: IEmail[], userId: string, accountId: string): Promise<void> {
+  async cacheEmails(emails, userId, accountId) {
     for (const email of emails) {
       try {
         await Email.findOneAndUpdate(
@@ -310,18 +281,18 @@ export class EmailService {
     }
   }
 
-  private async updateEmailFlags(messageIds: string[], flags: Partial<IEmail['flags']>): Promise<void> {
+  async updateEmailFlags(messageIds, flags) {
     await Email.updateMany(
       { messageId: { $in: messageIds } },
       { $set: { [`flags.${Object.keys(flags)[0]}`]: Object.values(flags)[0] } }
     );
   }
 
-  private convertToInterface(doc: any): IEmail {
+  convertToInterface(doc) {
     return doc.toObject();
   }
 
-  private async searchEmailsLocally(userId: string, accountId: string, query: IEmailSearchQuery): Promise<IEmail[]> {
+  async searchEmailsLocally(userId, accountId, query) {
     const searchQuery = Email.search(userId, {
       ...query,
       accountId
@@ -331,8 +302,8 @@ export class EmailService {
     return results.map(this.convertToInterface);
   }
 
-  private buildThreadsFromEmails(emails: IEmail[]): IEmailThread[] {
-    const threadMap = new Map<string, IEmailThread>();
+  buildThreadsFromEmails(emails) {
+    const threadMap = new Map();
     
     emails.forEach(email => {
       const threadId = this.getThreadIdFromSubject(email.subject);
@@ -350,7 +321,7 @@ export class EmailService {
         });
       }
       
-      const thread = threadMap.get(threadId)!;
+      const thread = threadMap.get(threadId);
       thread.emails.push(email);
       thread.messageCount++;
       
@@ -380,7 +351,7 @@ export class EmailService {
     );
   }
 
-  private getThreadIdFromSubject(subject: string): string {
+  getThreadIdFromSubject(subject) {
     // Simple subject-based threading
     const cleanSubject = subject.replace(/^(Re:|Fwd?:)\s*/i, '').trim();
     return Buffer.from(cleanSubject).toString('base64');

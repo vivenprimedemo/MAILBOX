@@ -1,24 +1,20 @@
-import * as Imap from 'imap';
-import * as nodemailer from 'nodemailer';
+import Imap from 'imap';
+import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
-import { BaseEmailProvider } from './BaseEmailProvider';
-import { 
-  IEmailProviderCapabilities, 
-  ISendEmailOptions,
-  IEmailProviderConfig 
-} from '../interfaces/IEmailProvider';
-import { IEmail, IFolder, IEmailSearchQuery, IEmailThread, IEmailAddress } from '../interfaces/IEmail';
+import { BaseEmailProvider } from './BaseEmailProvider.js';
+// Import types would normally be here for TypeScript
+// For JavaScript, we'll use JSDoc comments instead
 
 export class IMAPProvider extends BaseEmailProvider {
-  private imapClient?: Imap;
-  private smtpTransporter?: nodemailer.Transporter;
-  private folders: IFolder[] = [];
+  imapClient;
+  smtpTransporter;
+  folders = [];
 
-  constructor(config: IEmailProviderConfig) {
+  constructor(config) {
     super(config);
   }
 
-  getCapabilities(): IEmailProviderCapabilities {
+  getCapabilities() {
     return {
       supportsThreading: true,
       supportsLabels: false,
@@ -31,14 +27,14 @@ export class IMAPProvider extends BaseEmailProvider {
     };
   }
 
-  async connect(): Promise<void> {
+  async connect() {
     return new Promise((resolve, reject) => {
       this.imapClient = new Imap({
-        host: this.config.host!,
+        host: this.config.host,
         port: this.config.port || 993,
         tls: this.config.secure !== false,
         user: this.config.auth.user,
-        password: this.config.auth.pass!,
+        password: this.config.auth.pass,
         tlsOptions: this.config.tls || { rejectUnauthorized: false }
       });
 
@@ -61,26 +57,26 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  private setupSMTP(): void {
-    this.smtpTransporter = nodemailer.createTransporter({
-      host: this.config.host!.replace('imap', 'smtp'),
+  setupSMTP() {
+    this.smtpTransporter = nodemailer.createTransport({
+      host: this.config.host.replace('imap', 'smtp'),
       port: 587,
       secure: false,
       auth: {
         user: this.config.auth.user,
-        pass: this.config.auth.pass!
+        pass: this.config.auth.pass
       }
     });
   }
 
-  async disconnect(): Promise<void> {
+  async disconnect() {
     if (this.imapClient) {
       this.imapClient.end();
       this.isConnected = false;
     }
   }
 
-  async authenticate(credentials?: any): Promise<boolean> {
+  async authenticate(credentials) {
     try {
       await this.connect();
       return true;
@@ -89,7 +85,7 @@ export class IMAPProvider extends BaseEmailProvider {
     }
   }
 
-  async getFolders(): Promise<IFolder[]> {
+  async getFolders() {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -108,14 +104,14 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  private parseBoxes(boxes: any, parent?: string): IFolder[] {
-    const folders: IFolder[] = [];
+  parseBoxes(boxes, parent) {
+    const folders = [];
 
     Object.keys(boxes).forEach(name => {
       const box = boxes[name];
       const fullName = parent ? `${parent}${box.delimiter}${name}` : name;
       
-      const folder: IFolder = {
+      const folder = {
         name: fullName,
         displayName: name,
         type: this.getFolderType(name.toLowerCase()),
@@ -134,7 +130,7 @@ export class IMAPProvider extends BaseEmailProvider {
     return folders;
   }
 
-  private getFolderType(name: string): IFolder['type'] {
+  getFolderType(name) {
     if (name.includes('inbox')) return 'inbox';
     if (name.includes('sent')) return 'sent';
     if (name.includes('draft')) return 'drafts';
@@ -143,7 +139,7 @@ export class IMAPProvider extends BaseEmailProvider {
     return 'custom';
   }
 
-  async getEmails(folder: string, limit: number = 50, offset: number = 0): Promise<IEmail[]> {
+  async getEmails(folder, limit = 50, offset = 0) {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -165,16 +161,16 @@ export class IMAPProvider extends BaseEmailProvider {
           return;
         }
 
-        const fetch = this.imapClient!.seq.fetch(`${start}:${end}`, {
+        const fetch = this.imapClient.seq.fetch(`${start}:${end}`, {
           bodies: '',
           struct: true
         });
 
-        const emails: IEmail[] = [];
+        const emails = [];
 
         fetch.on('message', (msg, seqno) => {
-          let uid: number;
-          let flags: string[] = [];
+          let uid;
+          let flags = [];
 
           msg.once('attributes', (attrs) => {
             uid = attrs.uid;
@@ -208,7 +204,7 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  private parseEmailFromImap(parsed: any, uid: string, flags: string[], folder: string): IEmail {
+  parseEmailFromImap(parsed, uid, flags, folder) {
     return {
       id: uid,
       messageId: parsed.messageId || this.generateMessageId(),
@@ -237,7 +233,7 @@ export class IMAPProvider extends BaseEmailProvider {
     };
   }
 
-  private extractThreadId(parsed: any): string {
+  extractThreadId(parsed) {
     // Use In-Reply-To or References for threading
     if (parsed.inReplyTo) return parsed.inReplyTo;
     if (parsed.references) {
@@ -247,7 +243,7 @@ export class IMAPProvider extends BaseEmailProvider {
     return parsed.messageId;
   }
 
-  private parseAddress(addr: any): IEmailAddress {
+  parseAddress(addr) {
     if (!addr) return { address: '' };
     return {
       name: addr.name,
@@ -255,11 +251,11 @@ export class IMAPProvider extends BaseEmailProvider {
     };
   }
 
-  private parseAddresses(addresses: any[]): IEmailAddress[] {
+  parseAddresses(addresses) {
     return addresses.map(addr => this.parseAddress(addr));
   }
 
-  private parseAttachments(attachments: any[]): any[] {
+  parseAttachments(attachments) {
     return attachments.map(att => ({
       filename: att.filename,
       contentType: att.contentType,
@@ -269,13 +265,13 @@ export class IMAPProvider extends BaseEmailProvider {
     }));
   }
 
-  async getEmail(messageId: string, folder?: string): Promise<IEmail | null> {
+  async getEmail(messageId, folder) {
     // Implementation for getting specific email
     const emails = await this.getEmails(folder || 'INBOX', 1000);
     return emails.find(email => email.messageId === messageId) || null;
   }
 
-  async getThread(threadId: string): Promise<IEmailThread | null> {
+  async getThread(threadId) {
     const emails = await this.getEmails('INBOX', 1000);
     const threadEmails = emails.filter(email => email.threadId === threadId);
     if (threadEmails.length === 0) return null;
@@ -284,12 +280,12 @@ export class IMAPProvider extends BaseEmailProvider {
     return threads[0] || null;
   }
 
-  async getThreads(folder: string, limit?: number, offset?: number): Promise<IEmailThread[]> {
+  async getThreads(folder, limit, offset) {
     const emails = await this.getEmails(folder, limit, offset);
     return this.buildThreads(emails);
   }
 
-  async searchEmails(query: IEmailSearchQuery): Promise<IEmail[]> {
+  async searchEmails(query) {
     // Basic implementation - can be enhanced
     const emails = await this.getEmails(query.folder || 'INBOX', 1000);
     
@@ -307,28 +303,28 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async searchThreads(query: IEmailSearchQuery): Promise<IEmailThread[]> {
+  async searchThreads(query) {
     const emails = await this.searchEmails(query);
     return this.buildThreads(emails);
   }
 
-  async markAsRead(messageIds: string[], folder?: string): Promise<void> {
+  async markAsRead(messageIds, folder) {
     await this.updateFlags(messageIds, ['\\Seen'], 'add', folder);
   }
 
-  async markAsUnread(messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnread(messageIds, folder) {
     await this.updateFlags(messageIds, ['\\Seen'], 'remove', folder);
   }
 
-  async markAsFlagged(messageIds: string[], folder?: string): Promise<void> {
+  async markAsFlagged(messageIds, folder) {
     await this.updateFlags(messageIds, ['\\Flagged'], 'add', folder);
   }
 
-  async markAsUnflagged(messageIds: string[], folder?: string): Promise<void> {
+  async markAsUnflagged(messageIds, folder) {
     await this.updateFlags(messageIds, ['\\Flagged'], 'remove', folder);
   }
 
-  private async updateFlags(messageIds: string[], flags: string[], action: 'add' | 'remove', folder?: string): Promise<void> {
+  async updateFlags(messageIds, flags, action, folder) {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -342,7 +338,7 @@ export class IMAPProvider extends BaseEmailProvider {
         }
 
         const operation = action === 'add' ? 'addFlags' : 'delFlags';
-        this.imapClient![operation](messageIds, flags, (err) => {
+        this.imapClient[operation](messageIds, flags, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -350,12 +346,12 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async deleteEmails(messageIds: string[], folder?: string): Promise<void> {
+  async deleteEmails(messageIds, folder) {
     await this.updateFlags(messageIds, ['\\Deleted'], 'add', folder);
     await this.expunge(folder);
   }
 
-  private async expunge(folder?: string): Promise<void> {
+  async expunge(folder) {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -368,7 +364,7 @@ export class IMAPProvider extends BaseEmailProvider {
           return;
         }
 
-        this.imapClient!.expunge((err) => {
+        this.imapClient.expunge((err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -376,7 +372,7 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async moveEmails(messageIds: string[], fromFolder: string, toFolder: string): Promise<void> {
+  async moveEmails(messageIds, fromFolder, toFolder) {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -389,7 +385,7 @@ export class IMAPProvider extends BaseEmailProvider {
           return;
         }
 
-        this.imapClient!.move(messageIds, toFolder, (err) => {
+        this.imapClient.move(messageIds, toFolder, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -397,7 +393,7 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async sendEmail(options: ISendEmailOptions): Promise<string> {
+  async sendEmail(options) {
     if (!this.smtpTransporter) {
       throw new Error('SMTP not configured');
     }
@@ -419,7 +415,7 @@ export class IMAPProvider extends BaseEmailProvider {
     return info.messageId;
   }
 
-  async replyToEmail(originalMessageId: string, options: Omit<ISendEmailOptions, 'to' | 'subject' | 'inReplyTo' | 'references'>): Promise<string> {
+  async replyToEmail(originalMessageId, options) {
     const originalEmail = await this.getEmail(originalMessageId);
     if (!originalEmail) {
       throw new Error('Original email not found');
@@ -434,7 +430,7 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async forwardEmail(originalMessageId: string, to: IEmailAddress[], message?: string): Promise<string> {
+  async forwardEmail(originalMessageId, to, message) {
     const originalEmail = await this.getEmail(originalMessageId);
     if (!originalEmail) {
       throw new Error('Original email not found');
@@ -458,20 +454,20 @@ ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
       bodyText: forwardedContent,
       attachments: originalEmail.attachments?.map(att => ({
         filename: att.filename,
-        content: att.data!,
+        content: att.data,
         contentType: att.contentType
       }))
     });
   }
 
-  async sync(folder?: string): Promise<void> {
+  async sync(folder) {
     // Implement real-time sync using IMAP IDLE
     if (!this.imapClient) return;
 
     this.imapClient.openBox(folder || 'INBOX', true, (err) => {
       if (err) return;
       
-      this.imapClient!.on('mail', () => {
+      this.imapClient.on('mail', () => {
         // New mail received
         this.getEmails(folder || 'INBOX', 1).then(emails => {
           if (emails.length > 0) {

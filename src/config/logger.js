@@ -79,7 +79,7 @@ export const logger = winston.createLogger({
 
 // Stream for morgan HTTP logger
 export const morganStream = {
-  write: (message: string) => {
+  write: (message) => {
     logger.http(message.trim());
   }
 };
@@ -90,7 +90,7 @@ export const authLogger = logger.child({ component: 'auth-service' });
 export const httpLogger = logger.child({ component: 'http' });
 
 // Error logging utility
-export const logError = (error: Error, context?: any) => {
+export const logError = (error, context) => {
   logger.error(error.message, {
     stack: error.stack,
     name: error.name,
@@ -99,16 +99,16 @@ export const logError = (error: Error, context?: any) => {
 };
 
 // Debug logging utility
-export const logDebug = (message: string, data?: any) => {
+export const logDebug = (message, data) => {
   logger.debug(message, data);
 };
 
 // Info logging utility
-export const logInfo = (message: string, data?: any) => {
+export const logInfo = (message, data) => {
   logger.info(message, data);
 };
 
 // Warn logging utility
-export const logWarn = (message: string, data?: any) => {
+export const logWarn = (message, data) => {
   logger.warn(message, data);
 };

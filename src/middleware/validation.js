@@ -1,8 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
 
-export const validate = (schema: Joi.ObjectSchema) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const validate = (schema) => {
+  return (req, res, next) => {
     const { error } = schema.validate(req.body, { abortEarly: false });
     
     if (error) {
@@ -22,8 +21,8 @@ export const validate = (schema: Joi.ObjectSchema) => {
   };
 };
 
-export const validateQuery = (schema: Joi.ObjectSchema) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const validateQuery = (schema) => {
+  return (req, res, next) => {
     const { error } = schema.validate(req.query, { abortEarly: false });
     
     if (error) {

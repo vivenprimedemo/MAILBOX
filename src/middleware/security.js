@@ -1,4 +1,3 @@
-import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
@@ -33,7 +32,7 @@ export const emailSendLimiter = rateLimit({
     success: false,
     message: 'Email sending rate limit exceeded'
   },
-  keyGenerator: (req: Request) => {
+  keyGenerator: (req) => {
     return `${req.ip}-${req.userId || 'anonymous'}`;
   }
 });
@@ -58,7 +57,7 @@ export const securityHeaders = helmet({
 
 // Compression middleware
 export const compressionMiddleware = compression({
-  filter: (req: Request, res: Response) => {
+  filter: (req, res) => {
     if (req.headers['x-no-compression']) {
       return false;
     }
@@ -68,9 +67,9 @@ export const compressionMiddleware = compression({
 });
 
 // Request sanitization
-export const sanitizeRequest = (req: Request, res: Response, next: NextFunction) => {
+export const sanitizeRequest = (req, res, next) => {
   // Remove potentially dangerous characters from string inputs
-  const sanitizeObject = (obj: any): any => {
+  const sanitizeObject = (obj) => {
     if (typeof obj === 'string') {
       return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
                .replace(/javascript:/gi, '')
@@ -82,7 +81,7 @@ export const sanitizeRequest = (req: Request, res: Response, next: NextFunction)
     }
     
     if (typeof obj === 'object' && obj !== null) {
-      const sanitized: any = {};
+      const sanitized = {};
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
           sanitized[key] = sanitizeObject(obj[key]);
@@ -103,7 +102,7 @@ export const sanitizeRequest = (req: Request, res: Response, next: NextFunction)
 
 // CORS configuration
 export const corsOptions = {
-  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+  origin: (origin, callback) => {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
     
     // Allow requests with no origin (mobile apps, etc.)
@@ -122,7 +121,7 @@ export const corsOptions = {
 };
 
 // Error handling for security middleware
-export const securityErrorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+export const securityErrorHandler = (err, req, res, next) => {
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({
       success: false,
@@ -146,7 +145,7 @@ export const securityErrorHandler = (err: Error, req: Request, res: Response, ne
 };
 
 // Request logging for security monitoring
-export const securityLogger = (req: Request, res: Response, next: NextFunction) => {
+export const securityLogger = (req, res, next) => {
   const startTime = Date.now();
   
   res.on('finish', () => {

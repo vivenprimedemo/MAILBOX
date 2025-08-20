@@ -1,9 +1,7 @@
-import { Request, Response } from 'express';
-import { AuthService } from '../services/AuthService';
-import { AuthRequest } from '../middleware/auth';
+import { AuthService } from '../services/AuthService.js';
 
 export class AuthController {
-  static async register(req: Request, res: Response): Promise<void> {
+  static async register(req, res) {
     try {
       const { username, email, password, firstName, lastName } = req.body;
 
@@ -34,7 +32,7 @@ export class AuthController {
     }
   }
 
-  static async login(req: Request, res: Response): Promise<void> {
+  static async login(req, res) {
     try {
       const { username, password } = req.body;
 
@@ -59,7 +57,7 @@ export class AuthController {
     }
   }
 
-  static async refreshToken(req: Request, res: Response): Promise<void> {
+  static async refreshToken(req, res) {
     try {
       const { token: oldToken } = req.body;
 
@@ -86,9 +84,9 @@ export class AuthController {
     }
   }
 
-  static async getProfile(req: AuthRequest, res: Response): Promise<void> {
+  static async getProfile(req, res) {
     try {
-      const user = await AuthService.getUserById(req.userId!);
+      const user = await AuthService.getUserById(req.userId);
       
       if (!user) {
         res.status(404).json({
@@ -113,11 +111,11 @@ export class AuthController {
     }
   }
 
-  static async updateProfile(req: AuthRequest, res: Response): Promise<void> {
+  static async updateProfile(req, res) {
     try {
       const updateData = req.body;
 
-      const user = await AuthService.updateUser(req.userId!, updateData);
+      const user = await AuthService.updateUser(req.userId, updateData);
 
       if (!user) {
         res.status(404).json({
@@ -143,7 +141,7 @@ export class AuthController {
     }
   }
 
-  static async updatePassword(req: AuthRequest, res: Response): Promise<void> {
+  static async updatePassword(req, res) {
     try {
       const { currentPassword, newPassword } = req.body;
 
@@ -155,7 +153,7 @@ export class AuthController {
         return;
       }
 
-      await AuthService.updatePassword(req.userId!, currentPassword, newPassword);
+      await AuthService.updatePassword(req.userId, currentPassword, newPassword);
 
       res.json({
         success: true,
@@ -169,9 +167,9 @@ export class AuthController {
     }
   }
 
-  static async deactivateAccount(req: AuthRequest, res: Response): Promise<void> {
+  static async deactivateAccount(req, res) {
     try {
-      await AuthService.deactivateUser(req.userId!);
+      await AuthService.deactivateUser(req.userId);
 
       res.json({
         success: true,
@@ -185,7 +183,7 @@ export class AuthController {
     }
   }
 
-  static async logout(req: AuthRequest, res: Response): Promise<void> {
+  static async logout(req, res) {
     // For JWT tokens, logout is handled client-side by removing the token
     // In a production environment, you might want to blacklist tokens
     res.json({

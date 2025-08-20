@@ -1,12 +1,12 @@
-import { Router, Request, Response } from 'express';
-import authRoutes from './auth';
-import emailRoutes from './emails';
-import { Database } from '../config/database';
+import { Router } from 'express';
+import authRoutes from './auth.js';
+import emailRoutes from './emails.js';
+import { Database } from '../config/database.js';
 
 const router = Router();
 
 // Health check endpoint
-router.get('/health', async (req: Request, res: Response) => {
+router.get('/health', async (req, res) => {
   try {
     const database = Database.getInstance();
     const dbHealthy = await database.isHealthy();
@@ -45,7 +45,7 @@ router.get('/health', async (req: Request, res: Response) => {
 });
 
 // API information endpoint
-router.get('/', (req: Request, res: Response) => {
+router.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Universal Email Client API',
@@ -74,7 +74,7 @@ router.use('/auth', authRoutes);
 router.use('/emails', emailRoutes);
 
 // 404 handler for API routes
-router.use('*', (req: Request, res: Response) => {
+router.use('*', (req, res) => {
   res.status(404).json({
     success: false,
     message: `API endpoint not found: ${req.method} ${req.originalUrl}`,

@@ -1,12 +1,11 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { IEmail, IEmailAddress, IAttachment } from '../interfaces/IEmail';
+import mongoose, { Schema } from 'mongoose';
 
-const EmailAddressSchema = new Schema<IEmailAddress>({
+const EmailAddressSchema = new Schema({
   name: { type: String },
   address: { type: String, required: true }
 });
 
-const AttachmentSchema = new Schema<IAttachment>({
+const AttachmentSchema = new Schema({
   filename: { type: String, required: true },
   contentType: { type: String, required: true },
   size: { type: Number, required: true },
@@ -22,7 +21,7 @@ const EmailFlagsSchema = new Schema({
   deleted: { type: Boolean, default: false }
 });
 
-const EmailSchema = new Schema<IEmail & Document>({
+const EmailSchema = new Schema({
   id: { type: String, required: true },
   messageId: { type: String, required: true, index: true },
   threadId: { type: String, index: true },
@@ -71,7 +70,7 @@ EmailSchema.methods.toggleFlag = function() {
   return this.save();
 };
 
-EmailSchema.methods.addLabel = function(label: string) {
+EmailSchema.methods.addLabel = function(label) {
   if (!this.labels.includes(label)) {
     this.labels.push(label);
     return this.save();
@@ -79,24 +78,24 @@ EmailSchema.methods.addLabel = function(label: string) {
   return Promise.resolve(this);
 };
 
-EmailSchema.methods.removeLabel = function(label: string) {
+EmailSchema.methods.removeLabel = function(label) {
   this.labels = this.labels.filter(l => l !== label);
   return this.save();
 };
 
 // Static methods
-EmailSchema.statics.findByThread = function(threadId: string, userId: string) {
+EmailSchema.statics.findByThread = function(threadId, userId) {
   return this.find({ threadId, userId }).sort({ date: 1 });
 };
 
-EmailSchema.statics.findUnread = function(userId: string, folder?: string) {
-  const query: any = { userId, 'flags.seen': false };
+EmailSchema.statics.findUnread = function(userId, folder) {
+  const query = { userId, 'flags.seen': false };
   if (folder) query.folder = folder;
   return this.find(query).sort({ date: -1 });
 };
 
-EmailSchema.statics.search = function(userId: string, searchQuery: any) {
-  const query: any = { userId };
+EmailSchema.statics.search = function(userId, searchQuery) {
+  const query = { userId };
   
   if (searchQuery.query) {
     query.$or = [
@@ -147,4 +146,4 @@ EmailSchema.statics.search = function(userId: string, searchQuery: any) {
     .skip(searchQuery.offset || 0);
 };
 
-export const Email = mongoose.model<IEmail & Document>('Email', EmailSchema);
+export const Email = mongoose.model('Email', EmailSchema);

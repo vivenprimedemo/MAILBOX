@@ -1,20 +1,20 @@
 import mongoose from 'mongoose';
-import { logger } from './logger';
+import { logger } from './logger.js';
 
 export class Database {
-  private static instance: Database;
-  private isConnected = false;
+  static instance;
+  isConnected = false;
 
-  private constructor() {}
+  constructor() {}
 
-  public static getInstance(): Database {
+  static getInstance() {
     if (!Database.instance) {
       Database.instance = new Database();
     }
     return Database.instance;
   }
 
-  public async connect(): Promise<void> {
+  async connect() {
     if (this.isConnected) {
       return;
     }
@@ -54,7 +54,7 @@ export class Database {
     }
   }
 
-  public async disconnect(): Promise<void> {
+  async disconnect() {
     if (!this.isConnected) {
       return;
     }
@@ -69,11 +69,11 @@ export class Database {
     }
   }
 
-  public getConnectionStatus(): boolean {
+  getConnectionStatus() {
     return this.isConnected && mongoose.connection.readyState === 1;
   }
 
-  public async isHealthy(): Promise<boolean> {
+  async isHealthy() {
     try {
       if (!this.isConnected) {
         return false;
@@ -88,7 +88,7 @@ export class Database {
     }
   }
 
-  public getConnectionInfo() {
+  getConnectionInfo() {
     return {
       isConnected: this.isConnected,
       readyState: mongoose.connection.readyState,

@@ -1,13 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
+import { User } from '../models/User.js';
 
-export interface AuthRequest extends Request {
-  user?: any;
-  userId?: string;
-}
-
-export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -19,7 +13,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     const user = await User.findOne({ id: decoded.userId, isActive: true });
     if (!user) {
@@ -47,7 +41,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
   }
 };
 
-export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -56,7 +50,7 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
       return next();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findOne({ id: decoded.userId, isActive: true });
     
     if (user) {
@@ -71,7 +65,7 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
   }
 };
 
-export const requireEmailAccount = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const requireEmailAccount = (req, res, next) => {
   const { accountId } = req.params;
   
   if (!req.user) {
@@ -81,7 +75,7 @@ export const requireEmailAccount = (req: AuthRequest, res: Response, next: NextF
     });
   }
 
-  const account = req.user.emailAccounts.find((acc: any) => acc.id === accountId);
+  const account = req.user.emailAccounts.find((acc) => acc.id === accountId);
   if (!account) {
     return res.status(404).json({
       success: false,
@@ -99,13 +93,3 @@ export const requireEmailAccount = (req: AuthRequest, res: Response, next: NextF
   req.emailAccount = account;
   next();
 };
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: any;
-      userId?: string;
-      emailAccount?: any;
-    }
-  }
-}

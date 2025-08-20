@@ -1,7 +1,6 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { IUser, IEmailAccount } from '../interfaces/IUser';
+import mongoose, { Schema } from 'mongoose';
 
-const EmailAccountSchema = new Schema<IEmailAccount>({
+const EmailAccountSchema = new Schema({
   id: { type: String, required: true },
   email: { type: String, required: true },
   provider: { type: String, enum: ['gmail', 'outlook', 'imap'], required: true },
@@ -21,7 +20,7 @@ const UserPreferencesSchema = new Schema({
   theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'light' }
 });
 
-const UserSchema = new Schema<IUser & Document>({
+const UserSchema = new Schema({
   id: { type: String, unique: true, required: true },
   username: { type: String, unique: true, required: true },
   email: { type: String, unique: true, required: true },
@@ -41,8 +40,8 @@ UserSchema.pre('save', function(next) {
   next();
 });
 
-UserSchema.methods.addEmailAccount = function(account: Omit<IEmailAccount, 'id' | 'createdAt' | 'updatedAt'>) {
-  const newAccount: IEmailAccount = {
+UserSchema.methods.addEmailAccount = function(account) {
+  const newAccount = {
     ...account,
     id: new mongoose.Types.ObjectId().toString(),
     createdAt: new Date(),
@@ -52,12 +51,12 @@ UserSchema.methods.addEmailAccount = function(account: Omit<IEmailAccount, 'id' 
   return newAccount;
 };
 
-UserSchema.methods.removeEmailAccount = function(accountId: string) {
-  this.emailAccounts = this.emailAccounts.filter((account: IEmailAccount) => account.id !== accountId);
+UserSchema.methods.removeEmailAccount = function(accountId) {
+  this.emailAccounts = this.emailAccounts.filter((account) => account.id !== accountId);
 };
 
-UserSchema.methods.getEmailAccount = function(accountId: string) {
-  return this.emailAccounts.find((account: IEmailAccount) => account.id === accountId);
+UserSchema.methods.getEmailAccount = function(accountId) {
+  return this.emailAccounts.find((account) => account.id === accountId);
 };
 
-export const User = mongoose.model<IUser & Document>('User', UserSchema);
+export const User = mongoose.model('User', UserSchema);
