@@ -1,4 +1,5 @@
 import { AuthService } from '../services/AuthService.js';
+import { logger } from '../config/logger.js';
 
 export class AuthController {
   static async register(req, res) {
@@ -25,6 +26,7 @@ export class AuthController {
         }
       });
     } catch (error) {
+      logger.error('User registration failed', { error: error.message, stack: error.stack, username: req.body.username, email: req.body.email });
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : 'Registration failed'
@@ -50,6 +52,7 @@ export class AuthController {
         }
       });
     } catch (error) {
+      logger.error('User login failed', { error: error.message, stack: error.stack, username: req.body.username });
       res.status(401).json({
         success: false,
         message: error instanceof Error ? error.message : 'Login failed'
@@ -77,6 +80,7 @@ export class AuthController {
         data: { token }
       });
     } catch (error) {
+      logger.error('Token refresh failed', { error: error.message, stack: error.stack });
       res.status(401).json({
         success: false,
         message: error instanceof Error ? error.message : 'Token refresh failed'
@@ -104,6 +108,7 @@ export class AuthController {
         data: { user: userResponse }
       });
     } catch (error) {
+      logger.error('Failed to get user profile', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(500).json({
         success: false,
         message: 'Failed to get profile'
@@ -134,6 +139,7 @@ export class AuthController {
         data: { user: userResponse }
       });
     } catch (error) {
+      logger.error('Profile update failed', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : 'Profile update failed'
@@ -160,6 +166,7 @@ export class AuthController {
         message: 'Password updated successfully'
       });
     } catch (error) {
+      logger.error('Password update failed', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : 'Password update failed'
@@ -176,6 +183,7 @@ export class AuthController {
         message: 'Account deactivated successfully'
       });
     } catch (error) {
+      logger.error('Account deactivation failed', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(500).json({
         success: false,
         message: 'Account deactivation failed'

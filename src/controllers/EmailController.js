@@ -1,6 +1,7 @@
 // Import dependencies
 import { EmailService } from '../services/EmailService.js';
 import { AuthService } from '../services/AuthService.js';
+import { logger } from '../config/logger.js';
 
 export class EmailController {
   static emailService = new EmailService();
@@ -16,6 +17,7 @@ export class EmailController {
         data: { folders }
       });
     } catch (error) {
+      logger.error('Failed to get folders', { error: error.message, stack: error.stack, accountId: req.params.accountId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get folders'
@@ -42,6 +44,7 @@ export class EmailController {
         data: { emails, count: emails.length }
       });
     } catch (error) {
+      logger.error('Failed to get emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get emails'
@@ -73,6 +76,7 @@ export class EmailController {
         data: { email }
       });
     } catch (error) {
+      logger.error('Failed to get email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get email'
@@ -98,6 +102,7 @@ export class EmailController {
         data: { threads, count: threads.length }
       });
     } catch (error) {
+      logger.error('Failed to get threads', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get threads'
@@ -124,6 +129,7 @@ export class EmailController {
         data: { thread }
       });
     } catch (error) {
+      logger.error('Failed to get thread', { error: error.message, stack: error.stack, accountId: req.params.accountId, threadId: req.params.threadId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get thread'
@@ -157,6 +163,7 @@ export class EmailController {
         data: { emails, count: emails.length }
       });
     } catch (error) {
+      logger.error('Search emails failed', { error: error.message, stack: error.stack, accountId: req.params.accountId, searchQuery: req.query });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Search failed'
@@ -176,6 +183,7 @@ export class EmailController {
         message: 'Emails marked as read'
       });
     } catch (error) {
+      logger.error('Failed to mark emails as read', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to mark emails as read'
@@ -195,6 +203,7 @@ export class EmailController {
         message: 'Emails marked as unread'
       });
     } catch (error) {
+      logger.error('Failed to mark emails as unread', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to mark emails as unread'
@@ -214,6 +223,7 @@ export class EmailController {
         message: 'Emails flagged'
       });
     } catch (error) {
+      logger.error('Failed to flag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to flag emails'
@@ -233,6 +243,7 @@ export class EmailController {
         message: 'Emails unflagged'
       });
     } catch (error) {
+      logger.error('Failed to unflag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to unflag emails'
@@ -252,6 +263,7 @@ export class EmailController {
         message: 'Emails deleted'
       });
     } catch (error) {
+      logger.error('Failed to delete emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to delete emails'
@@ -271,6 +283,7 @@ export class EmailController {
         message: 'Emails moved'
       });
     } catch (error) {
+      logger.error('Failed to move emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds, fromFolder: req.body.fromFolder, toFolder: req.body.toFolder });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to move emails'
@@ -291,6 +304,7 @@ export class EmailController {
         data: { messageId }
       });
     } catch (error) {
+      logger.error('Failed to send email', { error: error.message, stack: error.stack, accountId: req.params.accountId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to send email'
@@ -315,6 +329,7 @@ export class EmailController {
         data: { messageId: newMessageId }
       });
     } catch (error) {
+      logger.error('Failed to send reply', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to send reply'
@@ -340,6 +355,7 @@ export class EmailController {
         data: { messageId: newMessageId }
       });
     } catch (error) {
+      logger.error('Failed to forward email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to forward email'
@@ -358,6 +374,7 @@ export class EmailController {
         message: 'Account synced successfully'
       });
     } catch (error) {
+      logger.error('Failed to sync account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to sync account'
@@ -375,6 +392,7 @@ export class EmailController {
         data: { accounts }
       });
     } catch (error) {
+      logger.error('Failed to get email accounts', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get email accounts'
@@ -411,6 +429,7 @@ export class EmailController {
         data: { account: newAccount }
       });
     } catch (error) {
+      logger.error('Failed to add email account', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to add email account'
@@ -443,6 +462,7 @@ export class EmailController {
         data: { account: updatedAccount }
       });
     } catch (error) {
+      logger.error('Failed to update email account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update email account'
@@ -465,6 +485,7 @@ export class EmailController {
         message: 'Email account removed successfully'
       });
     } catch (error) {
+      logger.error('Failed to remove email account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to remove email account'
