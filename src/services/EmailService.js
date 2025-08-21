@@ -3,6 +3,7 @@ import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
 import { Email } from '../models/Email.js';
 import { AuthService } from './AuthService.js';
+import { createApiResponse, createApiError } from '../interfaces/EmailInterfaces.js';
 
 export class EmailService {
   providers = new Map();
@@ -279,11 +280,10 @@ export class EmailService {
       const emailsResponse = await this.getEmails(accountId, userId, request, false);
       if (emailsResponse.success) {
         const threads = this.buildThreadsFromEmails(emailsResponse.data);
-        return {
-          success: true,
-          data: threads,
-          metadata: emailsResponse.metadata
-        };
+        return createApiResponse(threads, {
+          ...emailsResponse.metadata,
+          provider: provider.config?.type || 'unknown'
+        });
       }
       return emailsResponse;
     }
@@ -309,17 +309,13 @@ export class EmailService {
     if (!capabilities.supportsSearch) {
       // Fall back to local search
       const results = await this.searchEmailsLocally(userId, accountId, request);
-      return {
-        success: true,
-        data: results,
-        metadata: {
-          total: results.length,
-          limit: request.limit || 50,
-          offset: request.offset || 0,
-          hasMore: false,
-          provider: provider.config?.type || 'unknown'
-        }
-      };
+      return createApiResponse(results, {
+        total: results.length,
+        limit: request.limit || 50,
+        offset: request.offset || 0,
+        hasMore: false,
+        provider: provider.config?.type || 'unknown'
+      });
     }
 
     return provider.searchEmails(request);
@@ -383,8 +379,11 @@ export class EmailService {
       throw new Error('Provider not found');
     }
     
-    await provider.deleteEmails(messageIds, folder);
-    await this.updateEmailFlags(messageIds, { deleted: true });
+    const response = await provider.deleteEmails(messageIds, folder);
+    if (response && response.success) {
+      await this.updateEmailFlags(messageIds, { deleted: true });
+    }
+    return response || createApiResponse({ deleted: messageIds.length }, { provider: provider.config?.type || 'unknown' });
   }
 
   async moveEmails(accountId, messageIds, fromFolder, toFolder, userId = null) {
@@ -393,13 +392,15 @@ export class EmailService {
       throw new Error('Provider not found');
     }
     
-    await provider.moveEmails(messageIds, fromFolder, toFolder);
-    
-    // Update local cache
-    await Email.updateMany(
-      { messageId: { $in: messageIds } },
-      { $set: { folder: toFolder } }
-    );
+    const response = await provider.moveEmails(messageIds, fromFolder, toFolder);
+    if (response && response.success) {
+      // Update local cache
+      await Email.updateMany(
+        { messageId: { $in: messageIds } },
+        { $set: { folder: toFolder } }
+      );
+    }
+    return response || createApiResponse({ moved: messageIds.length }, { provider: provider.config?.type || 'unknown' });
   }
 
   async sendEmail(accountId, request, userId = null) {
@@ -410,14 +411,7 @@ export class EmailService {
     
     const capabilities = provider.getCapabilities();
     if (!capabilities.supportsSending) {
-      return {
-        success: false,
-        error: {
-          code: 'SENDING_NOT_SUPPORTED',
-          message: 'Provider does not support sending emails',
-          provider: provider.config?.type || 'unknown'
-        }
-      };
+      return createApiError('SENDING_NOT_SUPPORTED', 'Provider does not support sending emails', null, provider.config?.type || 'unknown');
     }
     
     return provider.sendEmail(request);
@@ -449,20 +443,30 @@ export class EmailService {
 
     try {
       // Get all folders
-      const folders = await provider.getFolders();
+      const foldersResponse = await provider.getFolders();
+      const folders = foldersResponse.success ? foldersResponse.data : [];
       
+      let syncedCount = 0;
       // Sync each folder
       for (const folder of folders) {
         try {
-          const emails = await provider.getEmails(folder.name, 100);
-          await this.cacheEmails(emails, userId, accountId);
+          const emailsResponse = await provider.getEmails({ folderId: folder.id || folder.name, limit: 100 });
+          if (emailsResponse.success) {
+            await this.cacheEmails(emailsResponse.data, userId, accountId);
+            syncedCount += emailsResponse.data.length;
+          }
         } catch (error) {
           console.error(`Error syncing folder ${folder.name}:`, error);
         }
       }
+      
+      return createApiResponse({ synced: syncedCount, folders: folders.length }, {
+        provider: provider.config?.type || 'unknown',
+        timestamp: new Date()
+      });
     } catch (error) {
       console.error(`Error syncing account ${accountId}:`, error);
-      throw error;
+      return createApiError('SYNC_ERROR', error.message, error, provider.config?.type || 'unknown');
     }
   }
 

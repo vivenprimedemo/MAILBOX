@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
+import { createApiResponse } from '../interfaces/EmailInterfaces.js';
 
 export class AuthService {
   static JWT_SECRET = config.JWT_SECRET;
@@ -222,7 +223,11 @@ export class AuthService {
       throw new Error('User not found');
     }
 
-    return user.emailAccounts.filter((account) => account.isActive);
+    const accounts = user.emailAccounts.filter((account) => account.isActive);
+    return createApiResponse(accounts, {
+      total: accounts.length,
+      timestamp: new Date()
+    });
   }
 
   static async getEmailAccount(userId, accountId) {

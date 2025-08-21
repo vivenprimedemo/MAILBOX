@@ -10,17 +10,21 @@ export class EmailController {
     try {
       const { accountId } = req.params;
 
-      const folders = await EmailController.emailService.getFolders(accountId, req.userId);
+      const result = await EmailController.emailService.getFolders(accountId, req.userId);
 
-      res.json({
-        success: true,
-        data: { folders }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to get folders', { error: error.message, stack: error.stack, accountId: req.params.accountId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get folders'
+        data: null,
+        error: {
+          code: 'FETCH_FOLDERS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get folders',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -30,7 +34,7 @@ export class EmailController {
       const { accountId, folder } = req.params;
       const { limit, offset, useCache } = req.query;
 
-      const emails = await EmailController.emailService.getEmails(
+      const result = await EmailController.emailService.getEmails(
         accountId,
         req.userId,
         {
@@ -41,15 +45,19 @@ export class EmailController {
         useCache !== 'false'
       );
 
-      res.json({
-        success: true,
-        data: { emails, count: emails.length }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to get emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get emails'
+        data: null,
+        error: {
+          code: 'FETCH_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -59,30 +67,41 @@ export class EmailController {
       const { accountId, messageId } = req.params;
       const { folder } = req.query;
 
-      const email = await EmailController.emailService.getEmail(
+      const result = await EmailController.emailService.getEmail(
         accountId, 
         messageId, 
         folder,
         req.userId
       );
 
-      if (!email) {
+      if (!result || !result.success) {
         res.status(404).json({
           success: false,
-          message: 'Email not found'
+          error: {
+            code: 'EMAIL_NOT_FOUND',
+            message: 'Email not found',
+            provider: '',
+            timestamp: new Date()
+          },
+          data: null,
+          metadata: {}
         });
         return;
       }
 
-      res.json({
-        success: true,
-        data: { email }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to get email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get email'
+        data: null,
+        error: {
+          code: 'FETCH_EMAIL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get email',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -92,7 +111,7 @@ export class EmailController {
       const { accountId, folder } = req.params;
       const { limit, offset } = req.query;
 
-      const threads = await EmailController.emailService.getThreads(
+      const result = await EmailController.emailService.getThreads(
         accountId,
         req.userId,
         folder,
@@ -100,15 +119,19 @@ export class EmailController {
         offset ? parseInt(offset) : undefined
       );
 
-      res.json({
-        success: true,
-        data: { threads, count: threads.length }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to get threads', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get threads'
+        data: null,
+        error: {
+          code: 'FETCH_THREADS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get threads',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -117,25 +140,36 @@ export class EmailController {
     try {
       const { accountId, threadId } = req.params;
 
-      const thread = await EmailController.emailService.getThread(accountId, threadId, req.userId);
+      const result = await EmailController.emailService.getThread(accountId, threadId, req.userId);
 
-      if (!thread) {
+      if (!result || !result.success) {
         res.status(404).json({
           success: false,
-          message: 'Thread not found'
+          error: {
+            code: 'THREAD_NOT_FOUND',
+            message: 'Thread not found',
+            provider: '',
+            timestamp: new Date()
+          },
+          data: null,
+          metadata: {}
         });
         return;
       }
 
-      res.json({
-        success: true,
-        data: { thread }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to get thread', { error: error.message, stack: error.stack, accountId: req.params.accountId, threadId: req.params.threadId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get thread'
+        data: null,
+        error: {
+          code: 'FETCH_THREAD_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get thread',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -155,21 +189,25 @@ export class EmailController {
         delete searchQuery.dateEnd;
       }
 
-      const emails = await EmailController.emailService.searchEmails(
+      const result = await EmailController.emailService.searchEmails(
         accountId,
         req.userId,
         searchQuery
       );
 
-      res.json({
-        success: true,
-        data: { emails, count: emails.length }
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Search emails failed', { error: error.message, stack: error.stack, accountId: req.params.accountId, searchQuery: req.query });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Search failed'
+        data: null,
+        error: {
+          code: 'SEARCH_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Search failed',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -237,7 +275,14 @@ export class EmailController {
       });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to list emails'
+        data: null,
+        error: {
+          code: 'LIST_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to list emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -247,17 +292,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsRead(accountId, { messageIds, folderId: folder }, req.userId);
+      const result = await EmailController.emailService.markAsRead(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails marked as read'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to mark emails as read', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to mark emails as read'
+        data: null,
+        error: {
+          code: 'MARK_READ_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to mark emails as read',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -267,17 +316,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsUnread(accountId, { messageIds, folderId: folder }, req.userId);
+      const result = await EmailController.emailService.markAsUnread(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails marked as unread'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to mark emails as unread', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to mark emails as unread'
+        data: null,
+        error: {
+          code: 'MARK_UNREAD_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to mark emails as unread',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -287,17 +340,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsFlagged(accountId, { messageIds, folderId: folder }, req.userId);
+      const result = await EmailController.emailService.markAsFlagged(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails flagged'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to flag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to flag emails'
+        data: null,
+        error: {
+          code: 'MARK_FLAGGED_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to flag emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -307,17 +364,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsUnflagged(accountId, { messageIds, folderId: folder }, req.userId);
+      const result = await EmailController.emailService.markAsUnflagged(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails unflagged'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to unflag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to unflag emails'
+        data: null,
+        error: {
+          code: 'MARK_UNFLAGGED_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to unflag emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -327,17 +388,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.deleteEmails(accountId, messageIds, folder, req.userId);
+      const result = await EmailController.emailService.deleteEmails(accountId, messageIds, folder, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails deleted'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to delete emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to delete emails'
+        data: null,
+        error: {
+          code: 'DELETE_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to delete emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -347,17 +412,21 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, fromFolder, toFolder } = req.body;
 
-      await EmailController.emailService.moveEmails(accountId, messageIds, fromFolder, toFolder, req.userId);
+      const result = await EmailController.emailService.moveEmails(accountId, messageIds, fromFolder, toFolder, req.userId);
 
-      res.json({
-        success: true,
-        message: 'Emails moved'
-      });
+      res.json(result);
     } catch (error) {
       logger.error('Failed to move emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds, fromFolder: req.body.fromFolder, toFolder: req.body.toFolder });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to move emails'
+        data: null,
+        error: {
+          code: 'MOVE_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to move emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -378,7 +447,14 @@ export class EmailController {
       logger.error('Failed to send email', { error: error.message, stack: error.stack, accountId: req.params.accountId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to send email'
+        data: null,
+        error: {
+          code: 'SEND_EMAIL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to send email',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -404,7 +480,14 @@ export class EmailController {
       logger.error('Failed to send reply', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to send reply'
+        data: null,
+        error: {
+          code: 'REPLY_EMAIL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to send reply',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -431,7 +514,14 @@ export class EmailController {
       logger.error('Failed to forward email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to forward email'
+        data: null,
+        error: {
+          code: 'FORWARD_EMAIL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to forward email',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -450,7 +540,14 @@ export class EmailController {
       logger.error('Failed to sync account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to sync account'
+        data: null,
+        error: {
+          code: 'SYNC_ACCOUNT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to sync account',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -468,7 +565,14 @@ export class EmailController {
       logger.error('Failed to get email accounts', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to get email accounts'
+        data: null,
+        error: {
+          code: 'GET_ACCOUNTS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get email accounts',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -491,21 +595,39 @@ export class EmailController {
         
         res.status(400).json({
           success: false,
-          message: 'Failed to connect to email provider. Please check your credentials.'
+          data: null,
+          error: {
+            code: 'PROVIDER_CONNECTION_FAILED',
+            message: 'Failed to connect to email provider. Please check your credentials.',
+            provider: accountData.type || '',
+            timestamp: new Date()
+          },
+          metadata: {}
         });
         return;
       }
 
       res.status(201).json({
         success: true,
-        message: 'Email account added successfully',
-        data: { account: newAccount }
+        data: newAccount,
+        error: null,
+        metadata: {
+          provider: newAccount.provider,
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to add email account', { error: error.message, stack: error.stack, userId: req.userId });
       res.status(400).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to add email account'
+        data: null,
+        error: {
+          code: 'ADD_ACCOUNT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to add email account',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -524,21 +646,39 @@ export class EmailController {
       if (!updatedAccount) {
         res.status(404).json({
           success: false,
-          message: 'Email account not found'
+          data: null,
+          error: {
+            code: 'ACCOUNT_NOT_FOUND',
+            message: 'Email account not found',
+            provider: '',
+            timestamp: new Date()
+          },
+          metadata: {}
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'Email account updated successfully',
-        data: { account: updatedAccount }
+        data: updatedAccount,
+        error: null,
+        metadata: {
+          provider: updatedAccount.provider,
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to update email account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(400).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to update email account'
+        data: null,
+        error: {
+          code: 'UPDATE_ACCOUNT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to update email account',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
@@ -555,13 +695,24 @@ export class EmailController {
 
       res.json({
         success: true,
-        message: 'Email account removed successfully'
+        data: { removed: true },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to remove email account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to remove email account'
+        data: null,
+        error: {
+          code: 'REMOVE_ACCOUNT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to remove email account',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
   }
