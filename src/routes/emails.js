@@ -1,8 +1,8 @@
 import express from 'express';
 import { EmailController } from '../controllers/EmailController.js';
 import { authenticateToken, requireEmailAccount } from '../middleware/auth.js';
-import { validate, validateQuery, schemas } from '../middleware/validation.js';
 import { emailSendLimiter } from '../middleware/security.js';
+import { schemas, validate, validateQuery } from '../middleware/validation.js';
 
 const { Router } = express;
 
@@ -24,9 +24,12 @@ router.use('/accounts/:accountId', requireEmailAccount);
 router.get('/accounts/:accountId/folders', EmailController.getFolders);
 
 // Email operations
+// Fetch emails in a specific folder
 router.get('/accounts/:accountId/emails/:folder', validateQuery(schemas.search), EmailController.getEmails);
 router.get('/accounts/:accountId/emails/:folder/email/:messageId', EmailController.getEmail);
-router.get('/accounts/:accountId/list-emails', validateQuery(schemas.listEmails), EmailController.listEmails);
+
+// Fetch emails with pagination and advanced filtering
+router.get('/accounts/:accountId/emails', validateQuery(schemas.listEmails), EmailController.listEmails);
 router.get('/accounts/:accountId/search', validateQuery(schemas.search), EmailController.searchEmails);
 
 // Thread operations
