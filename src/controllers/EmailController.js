@@ -440,8 +440,11 @@ export class EmailController {
 
       res.status(201).json({
         success: true,
-        message: 'Email sent successfully',
-        data: { messageId }
+        data: { messageId },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to send email', { error: error.message, stack: error.stack, accountId: req.params.accountId });
@@ -473,8 +476,11 @@ export class EmailController {
 
       res.status(201).json({
         success: true,
-        message: 'Reply sent successfully',
-        data: { messageId: newMessageId }
+        data: { messageId: newMessageId },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to send reply', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
@@ -507,8 +513,11 @@ export class EmailController {
 
       res.status(201).json({
         success: true,
-        message: 'Email forwarded successfully',
-        data: { messageId: newMessageId }
+        data: { messageId: newMessageId },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to forward email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
@@ -534,7 +543,11 @@ export class EmailController {
 
       res.json({
         success: true,
-        message: 'Account synced successfully'
+        data: { synced: true },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to sync account', { error: error.message, stack: error.stack, accountId: req.params.accountId, userId: req.userId });
@@ -559,7 +572,11 @@ export class EmailController {
 
       res.json({
         success: true,
-        data: { accounts }
+        data: { accounts },
+        error: null,
+        metadata: {
+          timestamp: new Date()
+        }
       });
     } catch (error) {
       logger.error('Failed to get email accounts', { error: error.message, stack: error.stack, userId: req.userId });

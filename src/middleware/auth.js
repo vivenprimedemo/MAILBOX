@@ -10,7 +10,14 @@ export const authenticateToken = async (req, res, next) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Access token is required'
+        data: null,
+        error: {
+          code: 'TOKEN_REQUIRED',
+          message: 'Access token is required',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
 
@@ -20,7 +27,14 @@ export const authenticateToken = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid token or user not found'
+        data: null,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid token or user not found',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
 
@@ -31,13 +45,27 @@ export const authenticateToken = async (req, res, next) => {
     if (error instanceof jwt.JsonWebTokenError) {
       return res.status(403).json({
         success: false,
-        message: 'Invalid token'
+        data: null,
+        error: {
+          code: 'TOKEN_INVALID',
+          message: 'Invalid token',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
       });
     }
     
     return res.status(500).json({
       success: false,
-      message: 'Token verification failed'
+      data: null,
+      error: {
+        code: 'TOKEN_VERIFICATION_FAILED',
+        message: 'Token verification failed',
+        provider: '',
+        timestamp: new Date()
+      },
+      metadata: {}
     });
   }
 };
@@ -72,7 +100,14 @@ export const requireEmailAccount = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required'
+      data: null,
+      error: {
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication required',
+        provider: '',
+        timestamp: new Date()
+      },
+      metadata: {}
     });
   }
 
@@ -80,14 +115,28 @@ export const requireEmailAccount = (req, res, next) => {
   if (!account) {
     return res.status(404).json({
       success: false,
-      message: 'Email account not found'
+      data: null,
+      error: {
+        code: 'ACCOUNT_NOT_FOUND',
+        message: 'Email account not found',
+        provider: '',
+        timestamp: new Date()
+      },
+      metadata: {}
     });
   }
 
   if (!account.isActive) {
     return res.status(403).json({
       success: false,
-      message: 'Email account is disabled'
+      data: null,
+      error: {
+        code: 'ACCOUNT_DISABLED',
+        message: 'Email account is disabled',
+        provider: '',
+        timestamp: new Date()
+      },
+      metadata: {}
     });
   }
 

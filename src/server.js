@@ -66,13 +66,19 @@ class EmailClientServer {
     this.app.get('/', (req, res) => {
       res.json({
         success: true,
-        message: 'Universal Email Client Server',
-        version: '1.0.0',
-        status: 'running',
-        endpoints: {
-          api: '/api',
-          health: '/api/health',
-          docs: '/api/docs'
+        data: {
+          message: 'Universal Email Client Server',
+          version: '1.0.0',
+          status: 'running',
+          endpoints: {
+            api: '/api',
+            health: '/api/health',
+            docs: '/api/docs'
+          }
+        },
+        error: null,
+        metadata: {
+          timestamp: new Date()
         }
       });
     });
@@ -87,8 +93,15 @@ class EmailClientServer {
     this.app.use('*', (req, res) => {
       res.status(404).json({
         success: false,
-        message: `Route not found: ${req.method} ${req.originalUrl}`,
-        suggestion: 'Check the API documentation at /api for available endpoints'
+        data: null,
+        error: {
+          code: 'ROUTE_NOT_FOUND',
+          message: `Route not found: ${req.method} ${req.originalUrl}`,
+          provider: '',
+          timestamp: new Date(),
+          suggestion: 'Check the API documentation at /api for available endpoints'
+        },
+        metadata: {}
       });
     });
   }
@@ -113,11 +126,18 @@ class EmailClientServer {
       
       res.status(500).json({
         success: false,
-        message: 'Internal server error',
-        ...(isDevelopment && { 
-          error: err.message,
-          stack: err.stack 
-        })
+        data: null,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Internal server error',
+          provider: '',
+          timestamp: new Date(),
+          ...(isDevelopment && { 
+            details: err.message,
+            stack: err.stack 
+          })
+        },
+        metadata: {}
       });
     });
 

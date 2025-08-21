@@ -12,8 +12,15 @@ export const validate = (schema) => {
       
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: errorDetails
+        data: null,
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Validation failed',
+          provider: '',
+          timestamp: new Date(),
+          details: errorDetails
+        },
+        metadata: {}
       });
     }
     
@@ -33,8 +40,15 @@ export const validateQuery = (schema) => {
       
       return res.status(400).json({
         success: false,
-        message: 'Query validation failed',
-        errors: errorDetails
+        data: null,
+        error: {
+          code: 'QUERY_VALIDATION_FAILED',
+          message: 'Query validation failed',
+          provider: '',
+          timestamp: new Date(),
+          details: errorDetails
+        },
+        metadata: {}
       });
     }
     

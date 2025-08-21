@@ -16,9 +16,16 @@ npm test         # Run Jest tests
 node test-unified-api.js  # Test unified API structure
 ```
 
+**Environment setup:**
+```bash
+cp .env.example .env     # Copy environment template
+# Edit .env with your configuration
+```
+
 **Database:**
 - Ensure MongoDB is running on `mongodb://localhost:27017/email_client`
 - No migration scripts - uses Mongoose auto-schema
+- Database connection handled via singleton pattern in `src/config/database.js`
 
 ## Architecture Overview
 
@@ -123,5 +130,44 @@ Providers return consistent errors via `createApiError()` helper.
 - **No TypeScript**: Uses JSDoc comments for type hints
 - **Logging**: Winston-based logging with multiple transports (`logs/` directory)
 - **Graceful Shutdown**: Server handles SIGTERM/SIGINT with database cleanup
+
+## Key Implementation Details
+
+**Server Structure**: Uses a class-based approach (`EmailClientServer`) with lifecycle management:
+- `initializeMiddleware()` - Security, compression, body parsing, request sanitization
+- `initializeRoutes()` - API routing with structured 404 handling
+- `initializeErrorHandling()` - Global error handlers and process signal handling
+
+**Security Layers** (defined in `src/middleware/security.js`):
+- Helmet.js with CSP policies
+- Multiple rate limiters: general (100 req/15min), auth (5 req/15min), email send (100/hour)
+- Request sanitization to remove script tags and event handlers
+- CORS with origin validation
+- JWT token validation with user lookup
+
+**Authentication Flow** (`src/middleware/auth.js`):
+1. `authenticateToken` - Validates JWT and loads user
+2. `optionalAuth` - Non-blocking auth for public endpoints  
+3. `requireEmailAccount` - Validates account ownership and active status
+
+**Error Response Format**: All APIs return consistent structure:
+```javascript
+{
+  success: boolean,
+  data: any | null,
+  error: {
+    code: string,
+    message: string, 
+    provider: string,
+    timestamp: Date
+  } | null,
+  metadata: object
+}
+```
+
+**Environment Variables**: Configure via `.env` (see `.env.example`):
+- `JWT_SECRET` (required), `MONGODB_URI`, provider OAuth credentials
+- Rate limiting and CORS settings
+- All loaded through `src/config/index.js`
 
 The codebase prioritizes **provider abstraction** and **unified API responses** - when adding new providers or modifying existing ones, maintain the same interface contracts defined in `BaseEmailProvider`.
