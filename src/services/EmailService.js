@@ -1,5 +1,6 @@
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
+import { OutlookProvider } from '../providers/OutlookProvider.js';
 import { Email } from '../models/Email.js';
 
 export class EmailService {
@@ -19,15 +20,7 @@ export class EmailService {
         provider = new IMAPProvider(config);
         break;
       case 'outlook':
-        // Outlook can use IMAP or Graph API - implementing as IMAP for now
-        const outlookConfig = {
-          ...config,
-          type: 'imap',
-          host: 'outlook.office365.com',
-          port: 993,
-          secure: true
-        };
-        provider = new IMAPProvider(outlookConfig);
+        provider = new OutlookProvider(config);
         break;
       default:
         throw new Error(`Unsupported provider type: ${config.type}`);
@@ -60,49 +53,63 @@ export class EmailService {
     }
   }
 
-  async getFolders(accountId) {
+  async getFolders(accountId, request = {}) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
-    return provider.getFolders();
+    return provider.getFolders(request);
   }
 
-  async getEmails(accountId, userId, folder, limit, offset, useCache = true) {
+  async getEmails(accountId, userId, request, useCache = true) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
+
+    const { folderId, limit = 50, offset = 0 } = request;
 
     // Try to get from cache first
     if (useCache) {
       const cachedEmails = await Email.find({
         userId,
         accountId,
-        folder
-      }).sort({ date: -1 }).limit(limit || 50).skip(offset || 0);
+        folderId
+      }).sort({ date: -1 }).limit(limit).skip(offset);
 
       if (cachedEmails.length > 0) {
-        return cachedEmails.map(this.convertToInterface);
+        return {
+          success: true,
+          data: cachedEmails.map(this.convertToInterface),
+          metadata: {
+            total: cachedEmails.length,
+            limit,
+            offset,
+            hasMore: cachedEmails.length === limit,
+            provider: provider.config?.type || 'unknown'
+          }
+        };
       }
     }
 
     // Fetch from provider and cache
-    const emails = await provider.getEmails(folder, limit, offset);
-    await this.cacheEmails(emails, userId, accountId);
+    const response = await provider.getEmails(request);
+    if (response.success) {
+      await this.cacheEmails(response.data, userId, accountId);
+    }
     
-    return emails;
+    return response;
   }
 
-  async getEmail(accountId, messageId, folder) {
+  async getEmail(accountId, messageId, folderId) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
-    return provider.getEmail(messageId, folder);
+    return provider.getEmail(messageId, folderId);
   }
 
-  async getThreads(accountId, userId, folder, limit, offset) {
+  async getThreads(accountId, userId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -111,11 +118,19 @@ export class EmailService {
     const capabilities = provider.getCapabilities();
     if (!capabilities.supportsThreading) {
       // Fall back to grouping emails by subject
-      const emails = await this.getEmails(accountId, userId, folder, limit, offset);
-      return this.buildThreadsFromEmails(emails);
+      const emailsResponse = await this.getEmails(accountId, userId, request, false);
+      if (emailsResponse.success) {
+        const threads = this.buildThreadsFromEmails(emailsResponse.data);
+        return {
+          success: true,
+          data: threads,
+          metadata: emailsResponse.metadata
+        };
+      }
+      return emailsResponse;
     }
 
-    return provider.getThreads(folder, limit, offset);
+    return provider.getThreads(request);
   }
 
   async getThread(accountId, threadId) {
@@ -126,7 +141,7 @@ export class EmailService {
     return provider.getThread(threadId);
   }
 
-  async searchEmails(accountId, userId, query) {
+  async searchEmails(accountId, userId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -135,50 +150,73 @@ export class EmailService {
     const capabilities = provider.getCapabilities();
     if (!capabilities.supportsSearch) {
       // Fall back to local search
-      return this.searchEmailsLocally(userId, accountId, query);
+      const results = await this.searchEmailsLocally(userId, accountId, request);
+      return {
+        success: true,
+        data: results,
+        metadata: {
+          total: results.length,
+          limit: request.limit || 50,
+          offset: request.offset || 0,
+          hasMore: false,
+          provider: provider.config?.type || 'unknown'
+        }
+      };
     }
 
-    return provider.searchEmails(query);
+    return provider.searchEmails(request);
   }
 
-  async markAsRead(accountId, messageIds, folder) {
+  async markAsRead(accountId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
     
-    await provider.markAsRead(messageIds, folder);
-    await this.updateEmailFlags(messageIds, { seen: true });
+    const response = await provider.markAsRead(request);
+    if (response.success) {
+      await this.updateEmailFlags(request.messageIds, { seen: true });
+    }
+    return response;
   }
 
-  async markAsUnread(accountId, messageIds, folder) {
+  async markAsUnread(accountId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
     
-    await provider.markAsUnread(messageIds, folder);
-    await this.updateEmailFlags(messageIds, { seen: false });
+    const response = await provider.markAsUnread(request);
+    if (response.success) {
+      await this.updateEmailFlags(request.messageIds, { seen: false });
+    }
+    return response;
   }
 
-  async markAsFlagged(accountId, messageIds, folder) {
+  async markAsFlagged(accountId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
     
-    await provider.markAsFlagged(messageIds, folder);
-    await this.updateEmailFlags(messageIds, { flagged: true });
+    const response = await provider.markAsFlagged(request);
+    if (response.success) {
+      await this.updateEmailFlags(request.messageIds, { flagged: true });
+    }
+    return response;
   }
 
-  async markAsUnflagged(accountId, messageIds, folder) {
+  async markAsUnflagged(accountId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
     }
     
-    await provider.markAsUnflagged(messageIds, folder);
-    await this.updateEmailFlags(messageIds, { flagged: false });
+    const response = await provider.markAsUnflagged(request);
+    if (response.success) {
+      await this.updateEmailFlags(request.messageIds, { flagged: false });
+    }
+    return response;
   }
 
   async deleteEmails(accountId, messageIds, folder) {
@@ -206,7 +244,7 @@ export class EmailService {
     );
   }
 
-  async sendEmail(accountId, options) {
+  async sendEmail(accountId, request) {
     const provider = await this.getProvider(accountId);
     if (!provider) {
       throw new Error('Provider not found');
@@ -214,10 +252,17 @@ export class EmailService {
     
     const capabilities = provider.getCapabilities();
     if (!capabilities.supportsSending) {
-      throw new Error('Provider does not support sending emails');
+      return {
+        success: false,
+        error: {
+          code: 'SENDING_NOT_SUPPORTED',
+          message: 'Provider does not support sending emails',
+          provider: provider.config?.type || 'unknown'
+        }
+      };
     }
     
-    return provider.sendEmail(options);
+    return provider.sendEmail(request);
   }
 
   async replyToEmail(accountId, originalMessageId, options) {
@@ -271,7 +316,8 @@ export class EmailService {
           {
             ...email,
             userId,
-            accountId
+            accountId,
+            folder: email.folderId // Map folderId to folder for backward compatibility
           },
           { upsert: true, new: true }
         );
@@ -292,9 +338,9 @@ export class EmailService {
     return doc.toObject();
   }
 
-  async searchEmailsLocally(userId, accountId, query) {
+  async searchEmailsLocally(userId, accountId, request) {
     const searchQuery = Email.search(userId, {
-      ...query,
+      ...request,
       accountId
     });
     

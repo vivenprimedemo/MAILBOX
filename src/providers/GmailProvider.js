@@ -1,4 +1,5 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
+import { normalizeEmailAddress } from '../interfaces/EmailInterfaces.js';
 
 export class GmailProvider extends BaseEmailProvider {
   constructor(config) {
@@ -107,16 +108,33 @@ export class GmailProvider extends BaseEmailProvider {
     return response.json();
   }
 
-  async getFolders() {
-    const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
-    
-    return data.labels.map((label) => ({
-      name: label.id,
-      displayName: label.name,
-      type: this.mapLabelType(label.id),
-      unreadCount: parseInt(label.messagesUnread) || 0,
-      totalCount: parseInt(label.messagesTotal) || 0
-    }));
+  async getFolders(request = {}) {
+    try {
+      const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
+      
+      const folders = data.labels.map((label) => ({
+        id: label.id,
+        name: label.id,
+        displayName: label.name,
+        type: this.mapLabelType(label.id),
+        unreadCount: parseInt(label.messagesUnread) || 0,
+        totalCount: parseInt(label.messagesTotal) || 0,
+        parentId: null,
+        children: [],
+        isSystem: ['INBOX', 'SENT', 'DRAFT', 'TRASH', 'SPAM'].includes(label.id.toUpperCase()),
+        canDelete: label.type === 'user',
+        canRename: label.type === 'user'
+      }));
+
+      return this.createSuccessResponse(folders, {
+        total: folders.length,
+        limit: folders.length,
+        offset: 0,
+        hasMore: false
+      });
+    } catch (error) {
+      return this.createErrorResponse('FETCH_FOLDERS_ERROR', error.message, error);
+    }
   }
 
   mapLabelType(labelId) {
@@ -130,67 +148,99 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
-  async getEmails(folder, limit = 50, offset = 0) {
-    let query = `in:${folder}`;
-    const params = new URLSearchParams({
-      maxResults: limit.toString(),
-      q: query
-    });
+  async getEmails(request) {
+    try {
+      const { folderId = 'INBOX', limit = 50, offset = 0, orderBy = 'date', order = 'desc' } = request;
+      
+      let query = `in:${folderId}`;
+      const params = new URLSearchParams({
+        maxResults: limit.toString(),
+        q: query
+      });
 
-    const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
-    
-    if (!data.messages) return [];
+      const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+      
+      if (!data.messages) {
+        return this.createSuccessResponse([], {
+          total: 0,
+          limit,
+          offset,
+          hasMore: false
+        });
+      }
 
-    const emailPromises = data.messages.map((message) =>
-      this.getEmail(message.id, folder)
-    );
+      const emailPromises = data.messages.slice(offset, offset + limit).map((message) =>
+        this.getEmail(message.id, folderId)
+      );
 
-    const emails = await Promise.all(emailPromises);
-    return emails.filter(email => email !== null);
+      const emailResults = await Promise.all(emailPromises);
+      const emails = emailResults.filter(result => result.success).map(result => result.data);
+      
+      return this.createSuccessResponse(emails, {
+        total: data.resultSizeEstimate || emails.length,
+        limit,
+        offset,
+        hasMore: data.messages.length > offset + limit,
+        nextPageToken: data.nextPageToken
+      });
+    } catch (error) {
+      return this.createErrorResponse('FETCH_EMAILS_ERROR', error.message, error);
+    }
   }
 
-  async getEmail(messageId, folder) {
+  async getEmail(messageId, folderId) {
     try {
       const data = await this.makeGmailRequest(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`
       );
       
-      return this.parseGmailMessage(data, folder);
+      const email = this.parseGmailMessage(data, folderId);
+      return this.createSuccessResponse(email);
     } catch (error) {
-      return null;
+      return this.createErrorResponse('FETCH_EMAIL_ERROR', error.message, error);
     }
   }
 
-  parseGmailMessage(message, folder) {
+  parseGmailMessage(message, folderId) {
     const headers = message.payload.headers;
     const getHeader = (name) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
+
+    const bodyText = this.extractTextFromPayload(message.payload, 'text/plain');
+    const bodyHtml = this.extractTextFromPayload(message.payload, 'text/html');
+    const snippet = bodyText ? bodyText.substring(0, 150) : (bodyHtml ? bodyHtml.replace(/<[^>]*>/g, '').substring(0, 150) : '');
 
     return {
       id: message.id,
       messageId: getHeader('Message-ID') || message.id,
       threadId: message.threadId,
       subject: getHeader('Subject') || '(No Subject)',
-      from: this.parseGmailAddress(getHeader('From')),
-      to: this.parseGmailAddresses(getHeader('To')),
-      cc: this.parseGmailAddresses(getHeader('Cc')),
-      bcc: this.parseGmailAddresses(getHeader('Bcc')),
-      replyTo: this.parseGmailAddresses(getHeader('Reply-To')),
+      from: this.normalizeAddresses([this.parseGmailAddress(getHeader('From'))])[0] || { name: '', address: '' },
+      to: this.normalizeAddresses(this.parseGmailAddresses(getHeader('To'))),
+      cc: this.normalizeAddresses(this.parseGmailAddresses(getHeader('Cc'))),
+      bcc: this.normalizeAddresses(this.parseGmailAddresses(getHeader('Bcc'))),
+      replyTo: this.normalizeAddresses(this.parseGmailAddresses(getHeader('Reply-To'))),
       date: new Date(parseInt(message.internalDate)),
-      bodyText: this.extractTextFromPayload(message.payload, 'text/plain'),
-      bodyHtml: this.extractTextFromPayload(message.payload, 'text/html'),
+      bodyText,
+      bodyHtml,
+      snippet,
       attachments: this.extractAttachmentsFromPayload(message.payload),
-      flags: {
+      flags: this.createStandardFlags({
         seen: !message.labelIds?.includes('UNREAD'),
         flagged: message.labelIds?.includes('STARRED') || false,
         draft: message.labelIds?.includes('DRAFT') || false,
         answered: false, // Gmail doesn't provide this directly
-        deleted: message.labelIds?.includes('TRASH') || false
-      },
+        deleted: message.labelIds?.includes('TRASH') || false,
+        recent: false
+      }),
       labels: message.labelIds || [],
-      folder: folder || 'INBOX',
+      folderId: folderId || 'INBOX',
       provider: 'gmail',
       inReplyTo: getHeader('In-Reply-To'),
-      references: this.parseReferences(getHeader('References')?.split(' '))
+      references: this.parseReferences(getHeader('References')?.split(' ')),
+      priority: 'normal',
+      size: message.sizeEstimate || 0,
+      isEncrypted: false,
+      isSigned: false
     };
   }
 
@@ -277,32 +327,52 @@ export class GmailProvider extends BaseEmailProvider {
     return this.buildThreads(emails);
   }
 
-  async searchEmails(query) {
-    let searchQuery = query.query || '';
-    
-    if (query.from) searchQuery += ` from:${query.from}`;
-    if (query.to) searchQuery += ` to:${query.to}`;
-    if (query.subject) searchQuery += ` subject:"${query.subject}"`;
-    if (query.hasAttachment) searchQuery += ' has:attachment';
-    if (query.isUnread) searchQuery += ' is:unread';
-    if (query.isFlagged) searchQuery += ' is:starred';
-    if (query.folder) searchQuery += ` in:${query.folder}`;
+  async searchEmails(request) {
+    try {
+      const { query = '', from, to, subject, hasAttachment, isUnread, isFlagged, folderId, limit = 50, offset = 0 } = request;
+      
+      let searchQuery = query;
+      
+      if (from) searchQuery += ` from:${from}`;
+      if (to) searchQuery += ` to:${to}`;
+      if (subject) searchQuery += ` subject:"${subject}"`;
+      if (hasAttachment) searchQuery += ' has:attachment';
+      if (isUnread) searchQuery += ' is:unread';
+      if (isFlagged) searchQuery += ' is:starred';
+      if (folderId) searchQuery += ` in:${folderId}`;
 
-    const params = new URLSearchParams({
-      q: searchQuery,
-      maxResults: (query.limit || 50).toString()
-    });
+      const params = new URLSearchParams({
+        q: searchQuery,
+        maxResults: limit.toString()
+      });
 
-    const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
-    
-    if (!data.messages) return [];
+      const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+      
+      if (!data.messages) {
+        return this.createSuccessResponse([], {
+          total: 0,
+          limit,
+          offset,
+          hasMore: false
+        });
+      }
 
-    const emailPromises = data.messages.map((message) =>
-      this.getEmail(message.id)
-    );
+      const emailPromises = data.messages.slice(offset, offset + limit).map((message) =>
+        this.getEmail(message.id)
+      );
 
-    const emails = await Promise.all(emailPromises);
-    return emails.filter(email => email !== null);
+      const emailResults = await Promise.all(emailPromises);
+      const emails = emailResults.filter(result => result.success).map(result => result.data);
+      
+      return this.createSuccessResponse(emails, {
+        total: data.resultSizeEstimate || emails.length,
+        limit,
+        offset,
+        hasMore: data.messages.length > offset + limit
+      });
+    } catch (error) {
+      return this.createErrorResponse('SEARCH_EMAILS_ERROR', error.message, error);
+    }
   }
 
   async searchThreads(query) {
@@ -310,20 +380,40 @@ export class GmailProvider extends BaseEmailProvider {
     return this.buildThreads(emails);
   }
 
-  async markAsRead(messageIds, folder) {
-    await this.updateLabels(messageIds, [], ['UNREAD']);
+  async markAsRead(request) {
+    try {
+      await this.updateLabels(request.messageIds, [], ['UNREAD']);
+      return this.createSuccessResponse({ updated: request.messageIds.length });
+    } catch (error) {
+      return this.createErrorResponse('MARK_READ_ERROR', error.message, error);
+    }
   }
 
-  async markAsUnread(messageIds, folder) {
-    await this.updateLabels(messageIds, ['UNREAD'], []);
+  async markAsUnread(request) {
+    try {
+      await this.updateLabels(request.messageIds, ['UNREAD'], []);
+      return this.createSuccessResponse({ updated: request.messageIds.length });
+    } catch (error) {
+      return this.createErrorResponse('MARK_UNREAD_ERROR', error.message, error);
+    }
   }
 
-  async markAsFlagged(messageIds, folder) {
-    await this.updateLabels(messageIds, ['STARRED'], []);
+  async markAsFlagged(request) {
+    try {
+      await this.updateLabels(request.messageIds, ['STARRED'], []);
+      return this.createSuccessResponse({ updated: request.messageIds.length });
+    } catch (error) {
+      return this.createErrorResponse('MARK_FLAGGED_ERROR', error.message, error);
+    }
   }
 
-  async markAsUnflagged(messageIds, folder) {
-    await this.updateLabels(messageIds, [], ['STARRED']);
+  async markAsUnflagged(request) {
+    try {
+      await this.updateLabels(request.messageIds, [], ['STARRED']);
+      return this.createSuccessResponse({ updated: request.messageIds.length });
+    } catch (error) {
+      return this.createErrorResponse('MARK_UNFLAGGED_ERROR', error.message, error);
+    }
   }
 
   async updateLabels(messageIds, addLabelIds, removeLabelIds) {
@@ -352,64 +442,68 @@ export class GmailProvider extends BaseEmailProvider {
     await this.updateLabels(messageIds, [toFolder], [fromFolder]);
   }
 
-  async sendEmail(options) {
-    const email = this.buildMimeMessage(options);
-    const encodedEmail = Buffer.from(email).toString('base64url');
+  async sendEmail(request) {
+    try {
+      const email = this.buildMimeMessage(request);
+      const encodedEmail = Buffer.from(email).toString('base64url');
 
-    const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      body: JSON.stringify({ raw: encodedEmail })
-    });
+      const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        body: JSON.stringify({ raw: encodedEmail })
+      });
 
-    return data.id;
+      return this.createSuccessResponse({ messageId: data.id, id: data.id });
+    } catch (error) {
+      return this.createErrorResponse('SEND_EMAIL_ERROR', error.message, error);
+    }
   }
 
-  buildMimeMessage(options) {
+  buildMimeMessage(request) {
     const boundary = `----boundary_${Date.now()}`;
     let message = '';
 
     // Headers
     message += `From: ${this.config.auth.user}\r\n`;
-    message += `To: ${options.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+    message += `To: ${request.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
     
-    if (options.cc?.length) {
-      message += `Cc: ${options.cc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+    if (request.cc?.length) {
+      message += `Cc: ${request.cc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
     }
     
-    if (options.bcc?.length) {
-      message += `Bcc: ${options.bcc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+    if (request.bcc?.length) {
+      message += `Bcc: ${request.bcc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
     }
 
-    message += `Subject: ${options.subject}\r\n`;
+    message += `Subject: ${request.subject}\r\n`;
     
-    if (options.inReplyTo) {
-      message += `In-Reply-To: ${options.inReplyTo}\r\n`;
+    if (request.inReplyTo) {
+      message += `In-Reply-To: ${request.inReplyTo}\r\n`;
     }
     
-    if (options.references?.length) {
-      message += `References: ${options.references.join(' ')}\r\n`;
+    if (request.references?.length) {
+      message += `References: ${request.references.join(' ')}\r\n`;
     }
 
     message += `MIME-Version: 1.0\r\n`;
     message += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
 
     // Text content
-    if (options.bodyText) {
+    if (request.bodyText) {
       message += `--${boundary}\r\n`;
       message += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
-      message += `${options.bodyText}\r\n\r\n`;
+      message += `${request.bodyText}\r\n\r\n`;
     }
 
     // HTML content
-    if (options.bodyHtml) {
+    if (request.bodyHtml) {
       message += `--${boundary}\r\n`;
       message += `Content-Type: text/html; charset=utf-8\r\n\r\n`;
-      message += `${options.bodyHtml}\r\n\r\n`;
+      message += `${request.bodyHtml}\r\n\r\n`;
     }
 
     // Attachments
-    if (options.attachments?.length) {
-      for (const attachment of options.attachments) {
+    if (request.attachments?.length) {
+      for (const attachment of request.attachments) {
         message += `--${boundary}\r\n`;
         message += `Content-Type: ${attachment.contentType || 'application/octet-stream'}\r\n`;
         message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;

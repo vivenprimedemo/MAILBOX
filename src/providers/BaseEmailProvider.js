@@ -1,4 +1,11 @@
 import { EventEmitter } from 'events';
+import { 
+  createApiResponse, 
+  createApiError, 
+  normalizeEmailAddresses,
+  createEmailFlags,
+  ProviderCapabilities
+} from '../interfaces/EmailInterfaces.js';
 
 export class BaseEmailProvider {
   config;
@@ -89,88 +96,225 @@ export class BaseEmailProvider {
     return this.isConnected;
   }
 
-  // Abstract methods that must be implemented by subclasses
+  // Abstract methods that must be implemented by subclasses - Now with unified interfaces
+  
+  /**
+   * Get provider capabilities
+   * @returns {ProviderCapabilities}
+   */
   getCapabilities() {
     throw new Error('Method must be implemented by subclass');
   }
   
-  connect() {
+  /**
+   * Connect to the provider
+   * @returns {Promise<ApiResponse>}
+   */
+  async connect() {
     throw new Error('Method must be implemented by subclass');
   }
 
-  disconnect() {
+  /**
+   * Disconnect from the provider
+   * @returns {Promise<ApiResponse>}
+   */
+  async disconnect() {
     throw new Error('Method must be implemented by subclass');
   }
 
-  authenticate(credentials) {
+  /**
+   * Authenticate with the provider
+   * @param {AuthRequest} credentials - Authentication credentials
+   * @returns {Promise<ApiResponse>}
+   */
+  async authenticate(credentials) {
     throw new Error('Method must be implemented by subclass');
   }
   
-  getFolders() {
+  /**
+   * Get all folders
+   * @param {FolderRequest} request - Folder query parameters
+   * @returns {Promise<ApiResponse<EmailFolder[]>>}
+   */
+  async getFolders(request = {}) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  getEmails(folder, limit, offset) {
+  /**
+   * Get emails from a folder
+   * @param {EmailListRequest} request - Email query parameters
+   * @returns {Promise<ApiResponse<Email[]>>}
+   */
+  async getEmails(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  getEmail(messageId, folder) {
+  /**
+   * Get a specific email
+   * @param {string} messageId - Message ID
+   * @param {string} folderId - Folder ID (optional)
+   * @returns {Promise<ApiResponse<Email>>}
+   */
+  async getEmail(messageId, folderId) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  getThread(threadId) {
+  /**
+   * Get a specific thread
+   * @param {string} threadId - Thread ID
+   * @returns {Promise<ApiResponse<EmailThread>>}
+   */
+  async getThread(threadId) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  getThreads(folder, limit, offset) {
+  /**
+   * Get threads from a folder
+   * @param {ThreadRequest} request - Thread query parameters
+   * @returns {Promise<ApiResponse<EmailThread[]>>}
+   */
+  async getThreads(request) {
     throw new Error('Method must be implemented by subclass');
   }
   
-  searchEmails(query) {
+  /**
+   * Search emails
+   * @param {EmailSearchRequest} request - Search parameters
+   * @returns {Promise<ApiResponse<Email[]>>}
+   */
+  async searchEmails(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  searchThreads(query) {
+  /**
+   * Search threads
+   * @param {EmailSearchRequest} request - Search parameters
+   * @returns {Promise<ApiResponse<EmailThread[]>>}
+   */
+  async searchThreads(request) {
     throw new Error('Method must be implemented by subclass');
   }
   
-  markAsRead(messageIds, folder) {
+  /**
+   * Mark emails as read
+   * @param {EmailActionRequest} request - Action parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async markAsRead(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  markAsUnread(messageIds, folder) {
+  /**
+   * Mark emails as unread
+   * @param {EmailActionRequest} request - Action parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async markAsUnread(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  markAsFlagged(messageIds, folder) {
+  /**
+   * Mark emails as flagged
+   * @param {EmailActionRequest} request - Action parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async markAsFlagged(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  markAsUnflagged(messageIds, folder) {
+  /**
+   * Mark emails as unflagged
+   * @param {EmailActionRequest} request - Action parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async markAsUnflagged(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  deleteEmails(messageIds, folder) {
+  /**
+   * Delete emails
+   * @param {EmailActionRequest} request - Action parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async deleteEmails(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  moveEmails(messageIds, fromFolder, toFolder) {
+  /**
+   * Move emails between folders
+   * @param {MoveEmailRequest} request - Move parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async moveEmails(request) {
     throw new Error('Method must be implemented by subclass');
   }
   
-  sendEmail(options) {
+  /**
+   * Send email
+   * @param {SendEmailRequest} request - Email to send
+   * @returns {Promise<ApiResponse>}
+   */
+  async sendEmail(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  replyToEmail(originalMessageId, options) {
+  /**
+   * Reply to email
+   * @param {ReplyEmailRequest} request - Reply parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async replyToEmail(request) {
     throw new Error('Method must be implemented by subclass');
   }
 
-  forwardEmail(originalMessageId, to, message) {
+  /**
+   * Forward email
+   * @param {ForwardEmailRequest} request - Forward parameters
+   * @returns {Promise<ApiResponse>}
+   */
+  async forwardEmail(request) {
     throw new Error('Method must be implemented by subclass');
   }
   
-  sync(folder) {
+  /**
+   * Sync folder for real-time updates
+   * @param {string} folderId - Folder to sync
+   * @returns {Promise<ApiResponse>}
+   */
+  async sync(folderId) {
     throw new Error('Method must be implemented by subclass');
+  }
+
+  // Helper methods for subclasses to use
+  
+  /**
+   * Create a successful API response
+   */
+  createSuccessResponse(data, metadata = {}) {
+    return createApiResponse(data, {
+      provider: this.config?.type || 'unknown',
+      ...metadata
+    });
+  }
+
+  /**
+   * Create an error API response
+   */
+  createErrorResponse(code, message, details = null) {
+    return createApiError(code, message, details, this.config?.type || 'unknown');
+  }
+
+  /**
+   * Normalize email addresses to standard format
+   */
+  normalizeAddresses(addresses) {
+    return normalizeEmailAddresses(addresses);
+  }
+
+  /**
+   * Create standard email flags
+   */
+  createStandardFlags(flags) {
+    return createEmailFlags(flags);
   }
 }
