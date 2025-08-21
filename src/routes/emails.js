@@ -26,6 +26,7 @@ router.get('/accounts/:accountId/folders', EmailController.getFolders);
 // Email operations
 router.get('/accounts/:accountId/emails/:folder', validateQuery(schemas.search), EmailController.getEmails);
 router.get('/accounts/:accountId/emails/:folder/email/:messageId', EmailController.getEmail);
+router.get('/accounts/:accountId/list-emails', validateQuery(schemas.listEmails), EmailController.listEmails);
 router.get('/accounts/:accountId/search', validateQuery(schemas.search), EmailController.searchEmails);
 
 // Thread operations

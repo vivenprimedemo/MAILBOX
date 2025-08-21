@@ -136,25 +136,160 @@ export class OutlookProvider extends BaseEmailProvider {
     return 'custom';
   }
 
-  async getEmails(folder, limit = 50, offset = 0) {
+  async getEmails(request) {
+    const { folderId: folder = 'inbox', limit = 50, offset = 0 } = request;
+    
     if (!this.graphClient) {
       throw new Error('Not connected to Outlook');
     }
 
-    let endpoint = '/me/messages';
-    if (folder && folder !== 'inbox') {
-      endpoint = `/me/mailFolders/${folder}/messages`;
+    try {
+      let endpoint = '/me/messages';
+      if (folder && folder !== 'inbox') {
+        endpoint = `/me/mailFolders/${folder}/messages`;
+      }
+
+      const messages = await this.graphClient
+        .api(endpoint)
+        .top(limit)
+        .skip(offset)
+        .expand('attachments')
+        .orderby('receivedDateTime desc')
+        .get();
+
+      const emails = messages.value.map(message => this.parseOutlookMessage(message, folder));
+      
+      return this.createSuccessResponse(emails, {
+        total: messages['@odata.count'] || emails.length,
+        limit,
+        offset,
+        hasMore: messages['@odata.nextLink'] ? true : false,
+        nextLink: messages['@odata.nextLink']
+      });
+    } catch (error) {
+      return this.createErrorResponse('FETCH_EMAILS_ERROR', error.message, error);
     }
+  }
 
-    const messages = await this.graphClient
-      .api(endpoint)
-      .top(limit)
-      .skip(offset)
-      .expand('attachments')
-      .orderby('receivedDateTime desc')
-      .get();
+  async listEmails(request) {
+    try {
+      const {
+        folderId = 'inbox',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo
+      } = request;
 
-    return messages.value.map(message => this.parseOutlookMessage(message, folder));
+      if (!this.graphClient) {
+        throw new Error('Not connected to Outlook');
+      }
+
+      let endpoint = '/me/messages';
+      if (folderId && folderId !== 'inbox') {
+        endpoint = `/me/mailFolders/${folderId}/messages`;
+      }
+
+      let query = this.graphClient.api(endpoint);
+
+      // Apply search filters using OData $filter
+      const filters = [];
+      
+      if (search) {
+        filters.push(`contains(subject,'${search}') or contains(body/content,'${search}')`);
+      }
+      if (from) {
+        filters.push(`from/emailAddress/address eq '${from}'`);
+      }
+      if (to) {
+        filters.push(`toRecipients/any(r:r/emailAddress/address eq '${to}')`);
+      }
+      if (subject) {
+        filters.push(`contains(subject,'${subject}')`);
+      }
+      if (isUnread === true) {
+        filters.push(`isRead eq false`);
+      }
+      if (isUnread === false) {
+        filters.push(`isRead eq true`);
+      }
+      if (isFlagged === true) {
+        filters.push(`flag/flagStatus eq 'flagged'`);
+      }
+      if (isFlagged === false) {
+        filters.push(`flag/flagStatus ne 'flagged'`);
+      }
+      if (hasAttachment === true) {
+        filters.push(`hasAttachments eq true`);
+      }
+      if (hasAttachment === false) {
+        filters.push(`hasAttachments eq false`);
+      }
+      if (dateFrom) {
+        filters.push(`receivedDateTime ge ${dateFrom.toISOString()}`);
+      }
+      if (dateTo) {
+        filters.push(`receivedDateTime le ${dateTo.toISOString()}`);
+      }
+
+      if (filters.length > 0) {
+        query = query.filter(filters.join(' and '));
+      }
+
+      // Apply sorting
+      const sortField = this.mapSortField(sortBy);
+      const orderByClause = `${sortField} ${sortOrder}`;
+      
+      query = query
+        .top(limit)
+        .skip(offset)
+        .expand('attachments')
+        .orderby(orderByClause)
+        .count(true); // Include total count
+
+      const messages = await query.get();
+      const emails = messages.value.map(message => this.parseOutlookMessage(message, folderId));
+
+      const total = messages['@odata.count'] || emails.length;
+      const hasMore = offset + limit < total;
+
+      return this.createSuccessResponse(emails, {
+        total,
+        limit,
+        offset,
+        hasMore,
+        currentPage: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(total / limit),
+        nextOffset: hasMore ? offset + limit : null,
+        nextLink: messages['@odata.nextLink']
+      });
+    } catch (error) {
+      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+    }
+  }
+
+  mapSortField(sortBy) {
+    switch (sortBy) {
+      case 'date':
+        return 'receivedDateTime';
+      case 'subject':
+        return 'subject';
+      case 'from':
+        return 'from/emailAddress/address';
+      case 'size':
+        return 'bodyPreview';
+      default:
+        return 'receivedDateTime';
+    }
   }
 
   async getEmail(messageId, folder) {

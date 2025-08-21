@@ -10,7 +10,7 @@ export class EmailController {
     try {
       const { accountId } = req.params;
 
-      const folders = await EmailController.emailService.getFolders(accountId);
+      const folders = await EmailController.emailService.getFolders(accountId, req.userId);
 
       res.json({
         success: true,
@@ -33,9 +33,11 @@ export class EmailController {
       const emails = await EmailController.emailService.getEmails(
         accountId,
         req.userId,
-        folder,
-        limit ? parseInt(limit) : undefined,
-        offset ? parseInt(offset) : undefined,
+        {
+          folderId: folder,
+          limit: limit ? parseInt(limit) : undefined,
+          offset: offset ? parseInt(offset) : undefined
+        },
         useCache !== 'false'
       );
 
@@ -60,7 +62,8 @@ export class EmailController {
       const email = await EmailController.emailService.getEmail(
         accountId, 
         messageId, 
-        folder
+        folder,
+        req.userId
       );
 
       if (!email) {
@@ -114,7 +117,7 @@ export class EmailController {
     try {
       const { accountId, threadId } = req.params;
 
-      const thread = await EmailController.emailService.getThread(accountId, threadId);
+      const thread = await EmailController.emailService.getThread(accountId, threadId, req.userId);
 
       if (!thread) {
         res.status(404).json({
@@ -171,12 +174,80 @@ export class EmailController {
     }
   }
 
+  static async listEmails(req, res) {
+    try {
+      const { accountId } = req.params;
+      const { 
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        useCache = true
+      } = req.query;
+
+      // Parse boolean query parameters
+      const filters = {};
+      if (isUnread !== undefined) filters.isUnread = isUnread === 'true';
+      if (isFlagged !== undefined) filters.isFlagged = isFlagged === 'true';
+      if (hasAttachment !== undefined) filters.hasAttachment = hasAttachment === 'true';
+      if (from) filters.from = from;
+      if (to) filters.to = to;
+      if (subject) filters.subject = subject;
+      if (dateFrom) filters.dateFrom = dateFrom;
+      if (dateTo) filters.dateTo = dateTo;
+
+      const options = {
+        folderId,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        sortBy,
+        sortOrder,
+        search,
+        filters,
+        useCache: useCache !== 'false'
+      };
+
+      const result = await EmailController.emailService.listEmails(
+        accountId,
+        req.userId,
+        options
+      );
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(500).json(result);
+      }
+    } catch (error) {
+      logger.error('Failed to list emails', { 
+        error: error.message, 
+        stack: error.stack, 
+        accountId: req.params.accountId,
+        query: req.query 
+      });
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to list emails'
+      });
+    }
+  }
+
   static async markAsRead(req, res) {
     try {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsRead(accountId, messageIds, folder);
+      await EmailController.emailService.markAsRead(accountId, { messageIds, folderId: folder }, req.userId);
 
       res.json({
         success: true,
@@ -196,7 +267,7 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsUnread(accountId, messageIds, folder);
+      await EmailController.emailService.markAsUnread(accountId, { messageIds, folderId: folder }, req.userId);
 
       res.json({
         success: true,
@@ -216,7 +287,7 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsFlagged(accountId, messageIds, folder);
+      await EmailController.emailService.markAsFlagged(accountId, { messageIds, folderId: folder }, req.userId);
 
       res.json({
         success: true,
@@ -236,7 +307,7 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.markAsUnflagged(accountId, messageIds, folder);
+      await EmailController.emailService.markAsUnflagged(accountId, { messageIds, folderId: folder }, req.userId);
 
       res.json({
         success: true,
@@ -256,7 +327,7 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, folder } = req.body;
 
-      await EmailController.emailService.deleteEmails(accountId, messageIds, folder);
+      await EmailController.emailService.deleteEmails(accountId, messageIds, folder, req.userId);
 
       res.json({
         success: true,
@@ -276,7 +347,7 @@ export class EmailController {
       const { accountId } = req.params;
       const { messageIds, fromFolder, toFolder } = req.body;
 
-      await EmailController.emailService.moveEmails(accountId, messageIds, fromFolder, toFolder);
+      await EmailController.emailService.moveEmails(accountId, messageIds, fromFolder, toFolder, req.userId);
 
       res.json({
         success: true,
@@ -296,7 +367,7 @@ export class EmailController {
       const { accountId } = req.params;
       const emailOptions = req.body;
 
-      const messageId = await EmailController.emailService.sendEmail(accountId, emailOptions);
+      const messageId = await EmailController.emailService.sendEmail(accountId, emailOptions, req.userId);
 
       res.status(201).json({
         success: true,
@@ -320,7 +391,8 @@ export class EmailController {
       const newMessageId = await EmailController.emailService.replyToEmail(
         accountId, 
         messageId, 
-        replyOptions
+        replyOptions,
+        req.userId
       );
 
       res.status(201).json({
@@ -346,7 +418,8 @@ export class EmailController {
         accountId, 
         messageId, 
         to, 
-        message
+        message,
+        req.userId
       );
 
       res.status(201).json({

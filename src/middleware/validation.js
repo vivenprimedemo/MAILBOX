@@ -127,6 +127,24 @@ export const schemas = {
     dateEnd: Joi.date().iso().optional()
   }),
 
+  listEmails: Joi.object({
+    folderId: Joi.string().default('INBOX'),
+    limit: Joi.number().integer().min(1).max(100).default(50),
+    offset: Joi.number().integer().min(0).default(0),
+    sortBy: Joi.string().valid('date', 'subject', 'from', 'size').default('date'),
+    sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
+    search: Joi.string().allow('').default(''),
+    isUnread: Joi.boolean().optional(),
+    isFlagged: Joi.boolean().optional(),
+    hasAttachment: Joi.boolean().optional(),
+    from: Joi.string().optional(),
+    to: Joi.string().optional(),
+    subject: Joi.string().optional(),
+    dateFrom: Joi.date().iso().optional(),
+    dateTo: Joi.date().iso().optional(),
+    useCache: Joi.boolean().default(true)
+  }),
+
   updatePreferences: Joi.object({
     threadsEnabled: Joi.boolean().optional(),
     autoMarkAsRead: Joi.boolean().optional(),

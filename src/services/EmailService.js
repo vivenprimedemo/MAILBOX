@@ -2,6 +2,7 @@ import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
 import { Email } from '../models/Email.js';
+import { AuthService } from './AuthService.js';
 
 export class EmailService {
   providers = new Map();
@@ -30,8 +31,28 @@ export class EmailService {
     return provider;
   }
 
-  async getProvider(accountId) {
-    return this.providerInstances.get(accountId) || null;
+  async getProvider(accountId, userId = null) {
+    let provider = this.providerInstances.get(accountId);
+    
+    if (!provider && userId) {
+      const account = await AuthService.getEmailAccount(userId, accountId);
+      if (account && account.isActive) {
+        const config = {
+          type: account.provider,
+          ...account.config
+        };
+        
+        try {
+          provider = this.createProvider(config, accountId);
+          await provider.connect();
+        } catch (error) {
+          console.error(`Failed to auto-connect provider for account ${accountId}:`, error);
+          return null;
+        }
+      }
+    }
+    
+    return provider || null;
   }
 
   async removeProvider(accountId) {
@@ -53,8 +74,8 @@ export class EmailService {
     }
   }
 
-  async getFolders(accountId, request = {}) {
-    const provider = await this.getProvider(accountId);
+  async getFolders(accountId, userId = null, request = {}) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -62,7 +83,7 @@ export class EmailService {
   }
 
   async getEmails(accountId, userId, request, useCache = true) {
-    const provider = await this.getProvider(accountId);
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -101,8 +122,145 @@ export class EmailService {
     return response;
   }
 
-  async getEmail(accountId, messageId, folderId) {
-    const provider = await this.getProvider(accountId);
+  async listEmails(accountId, userId, options = {}) {
+    const provider = await this.getProvider(accountId, userId);
+    if (!provider) {
+      throw new Error('Provider not found');
+    }
+
+    const {
+      folderId = 'INBOX',
+      limit = 50,
+      offset = 0,
+      sortBy = 'date',
+      sortOrder = 'desc',
+      search = '',
+      filters = {},
+      useCache = true
+    } = options;
+
+    // Build enhanced request object
+    const request = {
+      folderId,
+      limit,
+      offset,
+      sortBy,
+      sortOrder,
+      search,
+      filters,
+      // Additional filter options
+      isUnread: filters.isUnread,
+      isFlagged: filters.isFlagged,
+      hasAttachment: filters.hasAttachment,
+      from: filters.from,
+      to: filters.to,
+      subject: filters.subject,
+      dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+      dateTo: filters.dateTo ? new Date(filters.dateTo) : undefined
+    };
+
+    try {
+      // Try cache first if enabled
+      if (useCache && !search && Object.keys(filters).length === 0) {
+        const cacheResult = await this.getEmailsFromCache(accountId, userId, request);
+        if (cacheResult) {
+          return cacheResult;
+        }
+      }
+
+      // Fetch from provider with enhanced request
+      const response = await provider.listEmails(request);
+      
+      if (response.success) {
+        // Cache emails for future use
+        await this.cacheEmails(response.data, userId, accountId);
+        
+        // Ensure consistent response format
+        return {
+          success: true,
+          data: response.data,
+          metadata: {
+            total: response.metadata?.total || response.data.length,
+            limit,
+            offset,
+            hasMore: response.metadata?.hasMore || (response.data.length === limit),
+            currentPage: Math.floor(offset / limit) + 1,
+            totalPages: response.metadata?.total ? Math.ceil(response.metadata.total / limit) : null,
+            nextOffset: response.metadata?.hasMore ? offset + limit : null,
+            provider: provider.config?.type || 'unknown',
+            sortBy,
+            sortOrder,
+            appliedFilters: filters
+          }
+        };
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error in listEmails:', error);
+      return {
+        success: false,
+        error: {
+          code: 'LIST_EMAILS_ERROR',
+          message: error.message,
+          provider: provider.config?.type || 'unknown'
+        }
+      };
+    }
+  }
+
+  async getEmailsFromCache(accountId, userId, request) {
+    const { folderId, limit, offset, sortBy, sortOrder } = request;
+    
+    try {
+      // Build sort object
+      const sortObj = {};
+      sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+      // Get total count for pagination
+      const totalCount = await Email.countDocuments({
+        userId,
+        accountId,
+        folderId
+      });
+
+      // Get emails with sorting and pagination
+      const cachedEmails = await Email.find({
+        userId,
+        accountId,
+        folderId
+      })
+      .sort(sortObj)
+      .limit(limit)
+      .skip(offset);
+
+      if (cachedEmails.length > 0) {
+        return {
+          success: true,
+          data: cachedEmails.map(this.convertToInterface),
+          metadata: {
+            total: totalCount,
+            limit,
+            offset,
+            hasMore: offset + limit < totalCount,
+            currentPage: Math.floor(offset / limit) + 1,
+            totalPages: Math.ceil(totalCount / limit),
+            nextOffset: offset + limit < totalCount ? offset + limit : null,
+            provider: 'cache',
+            sortBy,
+            sortOrder
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching from cache:', error);
+    }
+
+    return null;
+  }
+
+  async getEmail(accountId, messageId, folderId, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -110,7 +268,7 @@ export class EmailService {
   }
 
   async getThreads(accountId, userId, request) {
-    const provider = await this.getProvider(accountId);
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -133,8 +291,8 @@ export class EmailService {
     return provider.getThreads(request);
   }
 
-  async getThread(accountId, threadId) {
-    const provider = await this.getProvider(accountId);
+  async getThread(accountId, threadId, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -142,7 +300,7 @@ export class EmailService {
   }
 
   async searchEmails(accountId, userId, request) {
-    const provider = await this.getProvider(accountId);
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -167,8 +325,8 @@ export class EmailService {
     return provider.searchEmails(request);
   }
 
-  async markAsRead(accountId, request) {
-    const provider = await this.getProvider(accountId);
+  async markAsRead(accountId, request, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -180,8 +338,8 @@ export class EmailService {
     return response;
   }
 
-  async markAsUnread(accountId, request) {
-    const provider = await this.getProvider(accountId);
+  async markAsUnread(accountId, request, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -193,8 +351,8 @@ export class EmailService {
     return response;
   }
 
-  async markAsFlagged(accountId, request) {
-    const provider = await this.getProvider(accountId);
+  async markAsFlagged(accountId, request, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -206,8 +364,8 @@ export class EmailService {
     return response;
   }
 
-  async markAsUnflagged(accountId, request) {
-    const provider = await this.getProvider(accountId);
+  async markAsUnflagged(accountId, request, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -219,8 +377,8 @@ export class EmailService {
     return response;
   }
 
-  async deleteEmails(accountId, messageIds, folder) {
-    const provider = await this.getProvider(accountId);
+  async deleteEmails(accountId, messageIds, folder, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -229,8 +387,8 @@ export class EmailService {
     await this.updateEmailFlags(messageIds, { deleted: true });
   }
 
-  async moveEmails(accountId, messageIds, fromFolder, toFolder) {
-    const provider = await this.getProvider(accountId);
+  async moveEmails(accountId, messageIds, fromFolder, toFolder, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -244,8 +402,8 @@ export class EmailService {
     );
   }
 
-  async sendEmail(accountId, request) {
-    const provider = await this.getProvider(accountId);
+  async sendEmail(accountId, request, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -265,8 +423,8 @@ export class EmailService {
     return provider.sendEmail(request);
   }
 
-  async replyToEmail(accountId, originalMessageId, options) {
-    const provider = await this.getProvider(accountId);
+  async replyToEmail(accountId, originalMessageId, options, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -274,8 +432,8 @@ export class EmailService {
     return provider.replyToEmail(originalMessageId, options);
   }
 
-  async forwardEmail(accountId, originalMessageId, to, message) {
-    const provider = await this.getProvider(accountId);
+  async forwardEmail(accountId, originalMessageId, to, message, userId = null) {
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }
@@ -284,7 +442,7 @@ export class EmailService {
   }
 
   async syncAccount(accountId, userId) {
-    const provider = await this.getProvider(accountId);
+    const provider = await this.getProvider(accountId, userId);
     if (!provider) {
       throw new Error('Provider not found');
     }

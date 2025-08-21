@@ -357,6 +357,124 @@ Get a specific email by message ID.
 }
 ```
 
+## GET /api/emails/accounts/:accountId/list-emails
+
+**NEW ENHANCED ENDPOINT** - List emails with advanced filtering, sorting, and pagination.
+
+**Query Parameters:**
+- `folderId` (optional): Folder ID to list emails from (default: 'INBOX')
+- `limit` (optional): Number of emails to return (default: 50, max: 100)
+- `offset` (optional): Number of emails to skip for pagination (default: 0)
+- `sortBy` (optional): Sort field - 'date', 'subject', 'from', 'size' (default: 'date')
+- `sortOrder` (optional): Sort direction - 'asc', 'desc' (default: 'desc')
+- `search` (optional): General search query across subject and body
+- `isUnread` (optional): Filter unread emails (true/false)
+- `isFlagged` (optional): Filter flagged emails (true/false)
+- `hasAttachment` (optional): Filter emails with attachments (true/false)
+- `from` (optional): Filter by sender email address
+- `to` (optional): Filter by recipient email address
+- `subject` (optional): Filter by subject line
+- `dateFrom` (optional): Filter emails from this date (ISO format)
+- `dateTo` (optional): Filter emails to this date (ISO format)
+- `useCache` (optional): Use cached emails if available (default: true)
+
+**Example Requests:**
+```
+# Get first page of inbox emails sorted by date (newest first)
+GET /api/emails/accounts/acc_123/list-emails
+
+# Get unread emails with attachments
+GET /api/emails/accounts/acc_123/list-emails?isUnread=true&hasAttachment=true
+
+# Search for emails from specific sender
+GET /api/emails/accounts/acc_123/list-emails?from=jane@example.com&search=meeting
+
+# Get emails from last 30 days, sorted by subject
+GET /api/emails/accounts/acc_123/list-emails?dateFrom=2024-01-01&dateTo=2024-01-31&sortBy=subject&sortOrder=asc
+
+# Pagination - get second page (emails 51-100)
+GET /api/emails/accounts/acc_123/list-emails?limit=50&offset=50
+```
+
+**Enhanced Response with Pagination Metadata:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "msg_123",
+      "messageId": "<CAF+bwQ...@mail.gmail.com>",
+      "threadId": "thread_456",
+      "subject": "Meeting Tomorrow",
+      "from": {
+        "name": "Jane Smith",
+        "address": "jane@example.com"
+      },
+      "to": [
+        {
+          "name": "John Doe",
+          "address": "john@example.com"
+        }
+      ],
+      "cc": [],
+      "date": "2024-01-15T14:30:00.000Z",
+      "bodyText": "Hi John, let's meet tomorrow at 2 PM.",
+      "bodyHtml": "<p>Hi John, let's meet tomorrow at 2 PM.</p>",
+      "snippet": "Hi John, let's meet tomorrow at 2 PM.",
+      "attachments": [
+        {
+          "filename": "agenda.pdf",
+          "contentType": "application/pdf",
+          "size": 15420,
+          "attachmentId": "att_789"
+        }
+      ],
+      "flags": {
+        "seen": false,
+        "flagged": true,
+        "draft": false,
+        "answered": false,
+        "deleted": false
+      },
+      "labels": ["IMPORTANT", "INBOX"],
+      "folderId": "INBOX",
+      "provider": "gmail",
+      "size": 2048,
+      "priority": "normal"
+    }
+  ],
+  "metadata": {
+    "total": 1250,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": true,
+    "currentPage": 1,
+    "totalPages": 25,
+    "nextOffset": 50,
+    "provider": "gmail",
+    "sortBy": "date",
+    "sortOrder": "desc",
+    "appliedFilters": {
+      "isUnread": true,
+      "hasAttachment": true
+    }
+  }
+}
+```
+
+**Response Metadata Fields:**
+- `total`: Total number of emails matching the filters
+- `limit`: Number of emails requested
+- `offset`: Current offset for pagination
+- `hasMore`: Boolean indicating if more emails are available
+- `currentPage`: Current page number (1-based)
+- `totalPages`: Total number of pages available
+- `nextOffset`: Offset for the next page (null if no more pages)
+- `provider`: Email provider used (gmail/imap/outlook)
+- `sortBy`: Applied sort field
+- `sortOrder`: Applied sort direction
+- `appliedFilters`: Object containing the filters that were applied
+
 ## GET /api/emails/accounts/:accountId/search
 
 Search emails with advanced filters.

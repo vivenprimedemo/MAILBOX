@@ -188,6 +188,135 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
+  async listEmails(request) {
+    try {
+      const {
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo
+      } = request;
+
+      // Build Gmail search query
+      let query = `in:${folderId}`;
+      
+      // Add search text
+      if (search) {
+        query += ` ${search}`;
+      }
+      
+      // Add filters
+      if (from) query += ` from:${from}`;
+      if (to) query += ` to:${to}`;
+      if (subject) query += ` subject:"${subject}"`;
+      if (hasAttachment) query += ' has:attachment';
+      if (isUnread === true) query += ' is:unread';
+      if (isUnread === false) query += ' -is:unread';
+      if (isFlagged === true) query += ' is:starred';
+      if (isFlagged === false) query += ' -is:starred';
+      
+      // Add date filters
+      if (dateFrom) {
+        const fromStr = dateFrom.toISOString().split('T')[0];
+        query += ` after:${fromStr}`;
+      }
+      if (dateTo) {
+        const toStr = dateTo.toISOString().split('T')[0];
+        query += ` before:${toStr}`;
+      }
+
+      const params = new URLSearchParams({
+        maxResults: limit.toString(),
+        q: query
+      });
+
+      const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+      
+      if (!data.messages) {
+        return this.createSuccessResponse([], {
+          total: 0,
+          limit,
+          offset,
+          hasMore: false,
+          currentPage: Math.floor(offset / limit) + 1,
+          totalPages: 0,
+          nextOffset: null
+        });
+      }
+
+      // Apply offset manually since Gmail doesn't support native offset
+      const messagesToFetch = data.messages.slice(offset, offset + limit);
+      const emailPromises = messagesToFetch.map((message) =>
+        this.getEmail(message.id, folderId)
+      );
+
+      const emailResults = await Promise.all(emailPromises);
+      let emails = emailResults.filter(result => result.success).map(result => result.data);
+      
+      // Apply sorting (Gmail returns by relevance/date by default)
+      if (sortBy !== 'date' || sortOrder === 'asc') {
+        emails = this.sortEmails(emails, sortBy, sortOrder);
+      }
+
+      const total = data.resultSizeEstimate || data.messages.length;
+      const hasMore = offset + limit < total;
+
+      return this.createSuccessResponse(emails, {
+        total,
+        limit,
+        offset,
+        hasMore,
+        currentPage: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(total / limit),
+        nextOffset: hasMore ? offset + limit : null,
+        nextPageToken: data.nextPageToken
+      });
+    } catch (error) {
+      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+    }
+  }
+
+  sortEmails(emails, sortBy, sortOrder) {
+    return emails.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortBy) {
+        case 'date':
+          aVal = new Date(a.date);
+          bVal = new Date(b.date);
+          break;
+        case 'subject':
+          aVal = (a.subject || '').toLowerCase();
+          bVal = (b.subject || '').toLowerCase();
+          break;
+        case 'from':
+          aVal = (a.from?.name || a.from?.address || '').toLowerCase();
+          bVal = (b.from?.name || b.from?.address || '').toLowerCase();
+          break;
+        case 'size':
+          aVal = a.size || 0;
+          bVal = b.size || 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
   async getEmail(messageId, folderId) {
     try {
       const data = await this.makeGmailRequest(

@@ -139,7 +139,8 @@ export class IMAPProvider extends BaseEmailProvider {
     return 'custom';
   }
 
-  async getEmails(folder, limit = 50, offset = 0) {
+  async getEmails(request) {
+    const { folderId: folder = 'INBOX', limit = 50, offset = 0 } = request;
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
@@ -157,7 +158,12 @@ export class IMAPProvider extends BaseEmailProvider {
         const end = total - offset;
 
         if (start > end) {
-          resolve([]);
+          resolve(this.createSuccessResponse([], {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false
+          }));
           return;
         }
 
@@ -198,9 +204,175 @@ export class IMAPProvider extends BaseEmailProvider {
         fetch.once('error', reject);
         fetch.once('end', () => {
           emails.sort((a, b) => b.date.getTime() - a.date.getTime());
-          resolve(emails);
+          resolve(this.createSuccessResponse(emails, {
+            total,
+            limit,
+            offset,
+            hasMore: offset + limit < total
+          }));
         });
       });
+    });
+  }
+
+  async listEmails(request) {
+    try {
+      const {
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo
+      } = request;
+
+      return new Promise((resolve, reject) => {
+        if (!this.imapClient) {
+          reject(new Error('Not connected'));
+          return;
+        }
+
+        this.imapClient.openBox(folderId, true, (err, box) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const total = box.messages.total;
+          
+          // Build search criteria for IMAP
+          let searchCriteria = ['ALL'];
+          
+          if (search) {
+            searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
+          }
+          if (from) searchCriteria.push(['FROM', from]);
+          if (to) searchCriteria.push(['TO', to]);
+          if (subject) searchCriteria.push(['SUBJECT', subject]);
+          if (isUnread === true) searchCriteria.push(['UNSEEN']);
+          if (isUnread === false) searchCriteria.push(['SEEN']);
+          if (isFlagged === true) searchCriteria.push(['FLAGGED']);
+          if (isFlagged === false) searchCriteria.push(['UNFLAGGED']);
+          if (dateFrom) searchCriteria.push(['SINCE', dateFrom]);
+          if (dateTo) searchCriteria.push(['BEFORE', dateTo]);
+
+          this.imapClient.search(searchCriteria, (err, uids) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+
+            if (!uids.length) {
+              resolve(this.createSuccessResponse([], {
+                total: 0,
+                limit,
+                offset,
+                hasMore: false,
+                currentPage: Math.floor(offset / limit) + 1,
+                totalPages: 0,
+                nextOffset: null
+              }));
+              return;
+            }
+
+            // Apply pagination to UIDs
+            const paginatedUids = uids.slice(offset, offset + limit);
+
+            const fetch = this.imapClient.fetch(paginatedUids, {
+              bodies: '',
+              struct: true
+            });
+
+            const emails = [];
+
+            fetch.on('message', (msg, seqno) => {
+              let uid;
+              let flags = [];
+
+              msg.once('attributes', (attrs) => {
+                uid = attrs.uid;
+                flags = attrs.flags || [];
+              });
+
+              msg.once('body', (stream) => {
+                let buffer = '';
+                stream.on('data', (chunk) => {
+                  buffer += chunk.toString('utf8');
+                });
+
+                stream.once('end', async () => {
+                  try {
+                    const parsed = await simpleParser(buffer);
+                    const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
+                    emails.push(email);
+                  } catch (error) {
+                    console.error('Error parsing email:', error);
+                  }
+                });
+              });
+            });
+
+            fetch.once('error', reject);
+            fetch.once('end', () => {
+              // Apply sorting
+              const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
+              
+              const hasMore = offset + limit < uids.length;
+              
+              resolve(this.createSuccessResponse(sortedEmails, {
+                total: uids.length,
+                limit,
+                offset,
+                hasMore,
+                currentPage: Math.floor(offset / limit) + 1,
+                totalPages: Math.ceil(uids.length / limit),
+                nextOffset: hasMore ? offset + limit : null
+              }));
+            });
+          });
+        });
+      });
+    } catch (error) {
+      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+    }
+  }
+
+  sortEmails(emails, sortBy, sortOrder) {
+    return emails.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortBy) {
+        case 'date':
+          aVal = new Date(a.date);
+          bVal = new Date(b.date);
+          break;
+        case 'subject':
+          aVal = (a.subject || '').toLowerCase();
+          bVal = (b.subject || '').toLowerCase();
+          break;
+        case 'from':
+          aVal = (a.from?.name || a.from?.address || '').toLowerCase();
+          bVal = (b.from?.name || b.from?.address || '').toLowerCase();
+          break;
+        case 'size':
+          aVal = a.size || 0;
+          bVal = b.size || 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
   }
 
