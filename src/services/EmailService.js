@@ -36,6 +36,7 @@ export class EmailService {
     
     if (!provider && userId) {
       const account = await AuthService.getEmailAccount(userId, accountId);
+      
       if (account && account.isActive) {
         const config = {
           type: account.provider,
@@ -46,7 +47,14 @@ export class EmailService {
           provider = this.createProvider(config, accountId);
           await provider.connect();
         } catch (error) {
-          console.error(`Failed to auto-connect provider for account ${accountId}:`, error);
+          console.error(`Failed to create or connect provider for account ${accountId}:`, {
+            provider: account.provider,
+            error: error.message,
+            accountId,
+            userId
+          });
+          
+          // Return null so callers can handle the missing provider appropriately
           return null;
         }
       }
@@ -77,7 +85,9 @@ export class EmailService {
   async getFolders(accountId, userId = null, request = {}) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     return provider.getFolders(request);
   }
@@ -85,7 +95,9 @@ export class EmailService {
   async getEmails(accountId, userId, request, useCache = true) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
 
     const { folderId, limit = 50, offset = 0 } = request;
@@ -124,7 +136,9 @@ export class EmailService {
   async listEmails(accountId, userId, options = {}) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
 
     const {
@@ -255,7 +269,9 @@ export class EmailService {
   async getEmail(accountId, messageId, folderId, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     return provider.getEmail(messageId, folderId);
   }
@@ -263,7 +279,9 @@ export class EmailService {
   async getThreads(accountId, userId, request) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
 
     const capabilities = provider.getCapabilities();
@@ -289,7 +307,9 @@ export class EmailService {
   async getThread(accountId, threadId, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     return provider.getThread(threadId);
   }
@@ -297,7 +317,9 @@ export class EmailService {
   async searchEmails(accountId, userId, request) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
 
     const capabilities = provider.getCapabilities();
@@ -322,7 +344,9 @@ export class EmailService {
   async markAsRead(accountId, request, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.markAsRead(request);
@@ -335,7 +359,9 @@ export class EmailService {
   async markAsUnread(accountId, request, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.markAsUnread(request);
@@ -348,7 +374,9 @@ export class EmailService {
   async markAsFlagged(accountId, request, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.markAsFlagged(request);
@@ -361,7 +389,9 @@ export class EmailService {
   async markAsUnflagged(accountId, request, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.markAsUnflagged(request);
@@ -374,7 +404,9 @@ export class EmailService {
   async deleteEmails(accountId, messageIds, folder, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.deleteEmails(messageIds, folder);
@@ -390,7 +422,9 @@ export class EmailService {
   async moveEmails(accountId, messageIds, fromFolder, toFolder, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const response = await provider.moveEmails(messageIds, fromFolder, toFolder);
@@ -410,7 +444,9 @@ export class EmailService {
   async sendEmail(accountId, request, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     const capabilities = provider.getCapabilities();
@@ -427,7 +463,9 @@ export class EmailService {
   async replyToEmail(accountId, originalMessageId, options, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     return provider.replyToEmail(originalMessageId, options);
@@ -436,7 +474,9 @@ export class EmailService {
   async forwardEmail(accountId, originalMessageId, to, message, userId = null) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
     
     return provider.forwardEmail(originalMessageId, to, message);
@@ -445,7 +485,9 @@ export class EmailService {
   async syncAccount(accountId, userId) {
     const provider = await this.getProvider(accountId, userId);
     if (!provider) {
-      throw new Error('Provider not found');
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
     }
 
     try {

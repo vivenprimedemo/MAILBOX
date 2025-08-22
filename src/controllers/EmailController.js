@@ -62,11 +62,15 @@ export class EmailController {
       });
     } catch (error) {
       logger.error('Failed to get emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
-      res.status(500).json({
+      
+      const errorCode = error.code || 'FETCH_EMAILS_ERROR';
+      const statusCode = errorCode === 'PROVIDER_INITIALIZATION_FAILED' ? 422 : 500;
+      
+      res.status(statusCode).json({
         success: false,
         data: null,
         error: {
-          code: 'FETCH_EMAILS_ERROR',
+          code: errorCode,
           message: error instanceof Error ? error.message : 'Failed to get emails',
           provider: '',
           timestamp: new Date()
