@@ -90,13 +90,25 @@ export class OutlookProvider extends BaseEmailProvider {
 
     const tokenRequest = {
       refreshToken: this.refreshToken,
-      scopes: ['https://graph.microsoft.com/mail.read', 'https://graph.microsoft.com/mail.send'],
+      scopes: ['email',
+        'https://graph.microsoft.com/IMAP.AccessAsUser.All',
+        'https://graph.microsoft.com/Mail.Read',
+        'https://graph.microsoft.com/Mail.Read.Shared',
+        'https://graph.microsoft.com/Mail.ReadBasic',
+        'https://graph.microsoft.com/Mail.Send',
+        'https://graph.microsoft.com/Mail.Send.Shared',
+        'https://graph.microsoft.com/Mail.ReadWrite',
+        'https://graph.microsoft.com/MailboxFolder.Read',
+        'offline_access',
+        'openid',
+        'profile',
+        'https://graph.microsoft.com/User.Read'],
     };
 
     try {
       const response = await this.msalInstance.acquireTokenByRefreshToken(tokenRequest);
       this.accessToken = response.accessToken;
-      
+
       // Reinitialize Graph client with new token
       this.graphClient = Client.init({
         authProvider: (done) => {
@@ -104,6 +116,7 @@ export class OutlookProvider extends BaseEmailProvider {
         }
       });
     } catch (error) {
+      console.error('Failed to refresh access token:', error);
       throw new Error('Failed to refresh access token');
     }
   }
@@ -363,16 +376,16 @@ export class OutlookProvider extends BaseEmailProvider {
       throw new Error('Not connected to Outlook');
     }
 
+
     try {
       const messages = await this.graphClient
         .api('/me/messages')
         .filter(`conversationId eq '${threadId}'`)
         .expand('attachments')
-        .orderby('receivedDateTime asc')
         .get();
-      
+
       if (!messages.value || messages.value.length === 0) return null;
-      
+
       const emails = messages.value.map(message => this.parseOutlookMessage(message));
       const threads = this.buildThreads(emails);
       return threads[0] || null;

@@ -173,8 +173,7 @@ export class EmailController {
       const { accountId, threadId } = req.params;
 
       const result = await EmailController.emailService.getThread(accountId, threadId, req.userId);
-
-      if (!result || (!result.data && !result.success)) {
+      if (!result) {
         res.status(404).json({
           success: false,
           error: {
