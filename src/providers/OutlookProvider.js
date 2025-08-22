@@ -1,6 +1,6 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { Client } from '@microsoft/microsoft-graph-client';
-import { PublicClientApplication } from '@azure/msal-node';
+import { ConfidentialClientApplication } from '@azure/msal-node';
 import 'isomorphic-fetch';
 import { consoleHelper } from '../../consoleHelper.js';
 
@@ -15,7 +15,7 @@ export class OutlookProvider extends BaseEmailProvider {
   }
 
   initializeMsal() {
-    if (this.config.auth.clientId) {
+    if (this.config.auth.clientId && this.config.auth.clientSecret) {
       const msalConfig = {
         auth: {
           clientId: this.config.auth.clientId,
@@ -23,10 +23,11 @@ export class OutlookProvider extends BaseEmailProvider {
           clientSecret: this.config.auth.clientSecret
         }
       };
-      this.msalInstance = new PublicClientApplication(msalConfig);
+      this.msalInstance = new ConfidentialClientApplication(msalConfig);
+    } else {
+      console.warn('MSAL not properly configured - missing clientId or clientSecret');
     }
   }
-
   getCapabilities() {
     return {
       supportsThreading: true,
