@@ -1,5 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
+const EmailConfigSchema = new Schema({}, {strict : false})
+
 const EmailAddressSchema = new Schema({
   name: { type: String },
   address: { type: String, required: true }
@@ -147,3 +149,4 @@ EmailSchema.statics.search = function(userId, searchQuery) {
 };
 
 export const Email = mongoose.model('Email', EmailSchema);
+export const EmailConfig = mongoose.model('email_config', EmailConfigSchema);

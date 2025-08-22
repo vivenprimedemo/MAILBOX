@@ -1,8 +1,10 @@
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
-import { Email } from '../models/Email.js';
+import { Email, EmailConfig } from '../models/Email.js';
 import { AuthService } from './AuthService.js';
+import { consoleHelper } from '../../consoleHelper.js';
+import { provider_config_map } from '../config/index.js';
 
 export class EmailService {
   providers = new Map();
@@ -31,34 +33,27 @@ export class EmailService {
     return provider;
   }
 
-  async getProvider(accountId, userId = null) {
-    let provider = this.providerInstances.get(accountId);
-    
-    if (!provider && userId) {
-      const account = await AuthService.getEmailAccount(userId, accountId);
-      
-      if (account && account.isActive) {
-        const config = {
-          type: account.provider,
-          ...account.config
-        };
-        
+    async getProvider(accountId, userId = null) {
+        let provider = this.providerInstances.get(accountId);
         try {
-          provider = this.createProvider(config, accountId);
-          await provider.connect();
+            const email_config = await EmailConfig.findOne({ _id: accountId });
+            const email_provider = email_config?.provider;
+            const provider_config = {
+                type: email_provider,
+                auth: {
+                    user: email_config?.email,
+                    accessToken: email_config?.oauth_config?.access_token,
+                    refreshToken: email_config?.oauth_config?.refresh_token,
+                    clientId: provider_config_map?.[email_provider]?.client_id,
+                    clientSecret: provider_config_map?.[email_provider]?.client_secret,
+                }
+            }
+            provider = this.createProvider(provider_config, accountId);
+            await provider.connect();
         } catch (error) {
-          console.error(`Failed to create or connect provider for account ${accountId}:`, {
-            provider: account.provider,
-            error: error.message,
-            accountId,
-            userId
-          });
-          
-          // Return null so callers can handle the missing provider appropriately
-          return null;
+            consoleHelper("EmailService@getProvider", error);
+            return null;
         }
-      }
-    }
     
     return provider || null;
   }

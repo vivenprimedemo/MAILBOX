@@ -1,5 +1,7 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
-import { normalizeEmailAddress } from '../interfaces/EmailInterfaces.js';
+import { google } from 'googleapis';
+import { consoleHelper } from '../../consoleHelper.js';
+import { provider_config_map } from '../config/index.js';
 
 export class GmailProvider extends BaseEmailProvider {
   constructor(config) {
@@ -59,27 +61,25 @@ export class GmailProvider extends BaseEmailProvider {
   }
 
   async refreshAccessToken() {
-    if (!this.refreshToken || !this.config.auth.clientId || !this.config.auth.clientSecret) {
-      throw new Error('Refresh token or OAuth credentials missing');
+    try {
+      consoleHelper("ATTEMPTING GMAIL REFRESH ACCESS TOKEN");
+      if (!this.refreshToken) {
+        throw new Error('Refresh token or OAuth credentials missing');
+      }
+
+      const oauth2Client = new google.auth.OAuth2(
+        provider_config_map?.gmail?.client_id,
+        provider_config_map?.gmail?.client_secret,
+        provider_config_map?.gmail?.redirect_uri
+      );
+      oauth2Client.setCredentials({ refresh_token: this.refreshToken });
+      const { credentials } = await oauth2Client.refreshAccessToken(); // uses fetch internally
+      this.accessToken = credentials.access_token;
+      this.refreshToken = credentials.refresh_token;
+    } catch (error) {
+      consoleHelper("GMAIL REFRESH ACCESS TOKEN FAILED", error);
+      throw error;
     }
-
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: this.config.auth.clientId,
-        client_secret: this.config.auth.clientSecret,
-        refresh_token: this.refreshToken,
-        grant_type: 'refresh_token'
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to refresh access token');
-    }
-
-    const data = await response.json();
-    this.accessToken = data.access_token;
   }
 
   async makeGmailRequest(url, options = {}) {
@@ -316,6 +316,7 @@ export class GmailProvider extends BaseEmailProvider {
       const email = this.parseGmailMessage(data, folderId);
       return email;
     } catch (error) {
+      consoleHelper('getEMAIL ERROR', error);
       throw error;
     }
   }
@@ -651,36 +652,37 @@ export class GmailProvider extends BaseEmailProvider {
 
   async replyToEmail(originalMessageId, options) {
     const originalEmail = await this.getEmail(originalMessageId);
-    if (!originalEmail) {
+    if (!originalEmail || !originalEmail?.messageId) {
       throw new Error('Original email not found');
     }
 
     return this.sendEmail({
-      to: [originalEmail.from],
+      to: [originalEmail?.from?.address],
       subject: `Re: ${originalEmail.subject}`,
-      inReplyTo: originalEmail.messageId,
-      references: [originalEmail.messageId, ...(originalEmail.references || [])],
+      inReplyTo: originalEmail?.messageId,
+      references: [originalEmail?.messageId, ...(originalEmail?.references || [])],
       ...options
     });
   }
 
   async forwardEmail(originalMessageId, to, message) {
-    const originalEmail = await this.getEmail(originalMessageId);
-    if (!originalEmail) {
+    const originalEmailResponse = await this.getEmail(originalMessageId);
+    if (!originalEmailResponse.success || !originalEmailResponse.data) {
       throw new Error('Original email not found');
     }
 
+    const originalEmail = originalEmailResponse.data;
     const forwardedContent = `
-${message || ''}
+            ${message || ''}
 
----------- Forwarded message ---------
-From: ${originalEmail.from.name ? `"${originalEmail.from.name}" ` : ''}<${originalEmail.from.address}>
-Date: ${originalEmail.date.toLocaleString()}
-Subject: ${originalEmail.subject}
-To: ${originalEmail.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}
+            ---------- Forwarded message ---------
+            From: ${originalEmail.from.name ? `"${originalEmail.from.name}" ` : ''}<${originalEmail.from.address}>
+            Date: ${originalEmail.date.toLocaleString()}
+            Subject: ${originalEmail.subject}
+            To: ${originalEmail.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}
 
-${originalEmail.bodyText || originalEmail.bodyHtml || ''}
-    `;
+            ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
+          `;
 
     return this.sendEmail({
       to,

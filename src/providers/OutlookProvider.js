@@ -2,6 +2,7 @@ import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { PublicClientApplication } from '@azure/msal-node';
 import 'isomorphic-fetch';
+import { consoleHelper } from '../../consoleHelper.js';
 
 export class OutlookProvider extends BaseEmailProvider {
   constructor(config) {
@@ -84,6 +85,7 @@ export class OutlookProvider extends BaseEmailProvider {
   }
 
   async refreshAccessToken() {
+    consoleHelper("ATTEMPT REFRESH ACCESS TOKEN");
     if (!this.refreshToken || !this.config.auth.clientId || !this.config.auth.clientSecret) {
       throw new Error('Refresh token or OAuth credentials missing');
     }
