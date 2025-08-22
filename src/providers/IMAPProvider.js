@@ -158,12 +158,7 @@ export class IMAPProvider extends BaseEmailProvider {
         const end = total - offset;
 
         if (start > end) {
-          resolve(this.createSuccessResponse([], {
-            total: 0,
-            limit,
-            offset,
-            hasMore: false
-          }));
+          resolve([]);
           return;
         }
 
@@ -204,12 +199,7 @@ export class IMAPProvider extends BaseEmailProvider {
         fetch.once('error', reject);
         fetch.once('end', () => {
           emails.sort((a, b) => b.date.getTime() - a.date.getTime());
-          resolve(this.createSuccessResponse(emails, {
-            total,
-            limit,
-            offset,
-            hasMore: offset + limit < total
-          }));
+          resolve(emails);
         });
       });
     });
@@ -271,15 +261,18 @@ export class IMAPProvider extends BaseEmailProvider {
             }
 
             if (!uids.length) {
-              resolve(this.createSuccessResponse([], {
-                total: 0,
-                limit,
-                offset,
-                hasMore: false,
-                currentPage: Math.floor(offset / limit) + 1,
-                totalPages: 0,
-                nextOffset: null
-              }));
+              resolve({
+                emails: [],
+                metadata: {
+                  total: 0,
+                  limit,
+                  offset,
+                  hasMore: false,
+                  currentPage: Math.floor(offset / limit) + 1,
+                  totalPages: 0,
+                  nextOffset: null
+                }
+              });
               return;
             }
 
@@ -327,21 +320,24 @@ export class IMAPProvider extends BaseEmailProvider {
               
               const hasMore = offset + limit < uids.length;
               
-              resolve(this.createSuccessResponse(sortedEmails, {
-                total: uids.length,
-                limit,
-                offset,
-                hasMore,
-                currentPage: Math.floor(offset / limit) + 1,
-                totalPages: Math.ceil(uids.length / limit),
-                nextOffset: hasMore ? offset + limit : null
-              }));
+              resolve({
+                emails: sortedEmails,
+                metadata: {
+                  total: uids.length,
+                  limit,
+                  offset,
+                  hasMore,
+                  currentPage: Math.floor(offset / limit) + 1,
+                  totalPages: Math.ceil(uids.length / limit),
+                  nextOffset: hasMore ? offset + limit : null
+                }
+              });
             });
           });
         });
       });
     } catch (error) {
-      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -439,12 +435,12 @@ export class IMAPProvider extends BaseEmailProvider {
 
   async getEmail(messageId, folder) {
     // Implementation for getting specific email
-    const emails = await this.getEmails(folder || 'INBOX', 1000);
+    const emails = await this.getEmails({ folderId: folder || 'INBOX', limit: 1000 });
     return emails.find(email => email.messageId === messageId) || null;
   }
 
   async getThread(threadId) {
-    const emails = await this.getEmails('INBOX', 1000);
+    const emails = await this.getEmails({ folderId: 'INBOX', limit: 1000 });
     const threadEmails = emails.filter(email => email.threadId === threadId);
     if (threadEmails.length === 0) return null;
     
@@ -452,16 +448,16 @@ export class IMAPProvider extends BaseEmailProvider {
     return threads[0] || null;
   }
 
-  async getThreads(folder, limit, offset) {
-    const emails = await this.getEmails(folder, limit, offset);
+  async getThreads(request) {
+    const emails = await this.getEmails(request);
     return this.buildThreads(emails);
   }
 
   async searchEmails(query) {
     // Basic implementation - can be enhanced
-    const emails = await this.getEmails(query.folder || 'INBOX', 1000);
+    const emails = await this.getEmails({ folderId: query.folder || 'INBOX', limit: 1000 });
     
-    return emails.filter(email => {
+    const filteredEmails = emails.filter(email => {
       if (query.query && !email.subject.toLowerCase().includes(query.query.toLowerCase())) {
         return false;
       }
@@ -473,6 +469,8 @@ export class IMAPProvider extends BaseEmailProvider {
       }
       return true;
     });
+    
+    return { emails: filteredEmails };
   }
 
   async searchThreads(query) {
@@ -480,20 +478,24 @@ export class IMAPProvider extends BaseEmailProvider {
     return this.buildThreads(emails);
   }
 
-  async markAsRead(messageIds, folder) {
-    await this.updateFlags(messageIds, ['\\Seen'], 'add', folder);
+  async markAsRead(request) {
+    await this.updateFlags(request.messageIds, ['\\Seen'], 'add', request.folderId);
+    return { updated: request.messageIds.length };
   }
 
-  async markAsUnread(messageIds, folder) {
-    await this.updateFlags(messageIds, ['\\Seen'], 'remove', folder);
+  async markAsUnread(request) {
+    await this.updateFlags(request.messageIds, ['\\Seen'], 'remove', request.folderId);
+    return { updated: request.messageIds.length };
   }
 
-  async markAsFlagged(messageIds, folder) {
-    await this.updateFlags(messageIds, ['\\Flagged'], 'add', folder);
+  async markAsFlagged(request) {
+    await this.updateFlags(request.messageIds, ['\\Flagged'], 'add', request.folderId);
+    return { updated: request.messageIds.length };
   }
 
-  async markAsUnflagged(messageIds, folder) {
-    await this.updateFlags(messageIds, ['\\Flagged'], 'remove', folder);
+  async markAsUnflagged(request) {
+    await this.updateFlags(request.messageIds, ['\\Flagged'], 'remove', request.folderId);
+    return { updated: request.messageIds.length };
   }
 
   async updateFlags(messageIds, flags, action, folder) {
@@ -518,9 +520,10 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async deleteEmails(messageIds, folder) {
-    await this.updateFlags(messageIds, ['\\Deleted'], 'add', folder);
-    await this.expunge(folder);
+  async deleteEmails(request) {
+    await this.updateFlags(request.messageIds, ['\\Deleted'], 'add', request.folderId);
+    await this.expunge(request.folderId);
+    return { deleted: request.messageIds.length };
   }
 
   async expunge(folder) {
@@ -544,22 +547,22 @@ export class IMAPProvider extends BaseEmailProvider {
     });
   }
 
-  async moveEmails(messageIds, fromFolder, toFolder) {
+  async moveEmails(request) {
     return new Promise((resolve, reject) => {
       if (!this.imapClient) {
         reject(new Error('Not connected'));
         return;
       }
 
-      this.imapClient.openBox(fromFolder, false, (err) => {
+      this.imapClient.openBox(request.sourceFolder, false, (err) => {
         if (err) {
           reject(err);
           return;
         }
 
-        this.imapClient.move(messageIds, toFolder, (err) => {
+        this.imapClient.move(request.messageIds, request.destinationFolder, (err) => {
           if (err) reject(err);
-          else resolve();
+          else resolve({ moved: request.messageIds.length });
         });
       });
     });
@@ -584,7 +587,7 @@ export class IMAPProvider extends BaseEmailProvider {
     };
 
     const info = await this.smtpTransporter.sendMail(mailOptions);
-    return info.messageId;
+    return { messageId: info.messageId, id: info.messageId };
   }
 
   async replyToEmail(originalMessageId, options) {
@@ -641,7 +644,7 @@ ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
       
       this.imapClient.on('mail', () => {
         // New mail received
-        this.getEmails(folder || 'INBOX', 1).then(emails => {
+        this.getEmails({ folderId: folder || 'INBOX', limit: 1 }).then(emails => {
           if (emails.length > 0) {
             this.emitNewEmail(emails[0]);
           }

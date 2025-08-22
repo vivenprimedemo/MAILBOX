@@ -12,7 +12,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.getFolders(accountId, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to get folders', { error: error.message, stack: error.stack, accountId: req.params.accountId });
       res.status(500).json({
@@ -45,7 +52,14 @@ export class EmailController {
         useCache !== 'false'
       );
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to get emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
@@ -74,7 +88,7 @@ export class EmailController {
         req.userId
       );
 
-      if (!result || !result.success) {
+      if (!result || (!result.data && !result.success)) {
         res.status(404).json({
           success: false,
           error: {
@@ -89,7 +103,14 @@ export class EmailController {
         return;
       }
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to get email', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageId: req.params.messageId });
       res.status(500).json({
@@ -119,7 +140,14 @@ export class EmailController {
         offset ? parseInt(offset) : undefined
       );
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to get threads', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
       res.status(500).json({
@@ -142,7 +170,7 @@ export class EmailController {
 
       const result = await EmailController.emailService.getThread(accountId, threadId, req.userId);
 
-      if (!result || !result.success) {
+      if (!result || (!result.data && !result.success)) {
         res.status(404).json({
           success: false,
           error: {
@@ -157,7 +185,14 @@ export class EmailController {
         return;
       }
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to get thread', { error: error.message, stack: error.stack, accountId: req.params.accountId, threadId: req.params.threadId });
       res.status(500).json({
@@ -195,7 +230,14 @@ export class EmailController {
         searchQuery
       );
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Search emails failed', { error: error.message, stack: error.stack, accountId: req.params.accountId, searchQuery: req.query });
       res.status(500).json({
@@ -261,11 +303,14 @@ export class EmailController {
         options
       );
 
-      if (result.success) {
-        res.json(result);
-      } else {
-        res.status(500).json(result);
-      }
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to list emails', { 
         error: error.message, 
@@ -294,7 +339,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.markAsRead(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to mark emails as read', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
@@ -318,7 +370,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.markAsUnread(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to mark emails as unread', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
@@ -342,7 +401,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.markAsFlagged(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to flag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
@@ -366,7 +432,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.markAsUnflagged(accountId, { messageIds, folderId: folder }, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to unflag emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
@@ -390,7 +463,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.deleteEmails(accountId, messageIds, folder, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to delete emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
       res.status(500).json({
@@ -414,7 +494,14 @@ export class EmailController {
 
       const result = await EmailController.emailService.moveEmails(accountId, messageIds, fromFolder, toFolder, req.userId);
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to move emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds, fromFolder: req.body.fromFolder, toFolder: req.body.toFolder });
       res.status(500).json({
@@ -436,11 +523,12 @@ export class EmailController {
       const { accountId } = req.params;
       const emailOptions = req.body;
 
-      const messageId = await EmailController.emailService.sendEmail(accountId, emailOptions, req.userId);
+      const result = await EmailController.emailService.sendEmail(accountId, emailOptions, req.userId);
+      console.log(result)
 
       res.status(201).json({
         success: true,
-        data: { messageId },
+        data: result,
         error: null,
         metadata: {
           timestamp: new Date()
@@ -467,7 +555,7 @@ export class EmailController {
       const { accountId, messageId } = req.params;
       const replyOptions = req.body;
 
-      const newMessageId = await EmailController.emailService.replyToEmail(
+      const result = await EmailController.emailService.replyToEmail(
         accountId, 
         messageId, 
         replyOptions,
@@ -476,7 +564,7 @@ export class EmailController {
 
       res.status(201).json({
         success: true,
-        data: { messageId: newMessageId },
+        data: result,
         error: null,
         metadata: {
           timestamp: new Date()
@@ -503,7 +591,7 @@ export class EmailController {
       const { accountId, messageId } = req.params;
       const { to, message } = req.body;
 
-      const newMessageId = await EmailController.emailService.forwardEmail(
+      const result = await EmailController.emailService.forwardEmail(
         accountId, 
         messageId, 
         to, 
@@ -513,7 +601,7 @@ export class EmailController {
 
       res.status(201).json({
         success: true,
-        data: { messageId: newMessageId },
+        data: result,
         error: null,
         metadata: {
           timestamp: new Date()

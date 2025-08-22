@@ -126,14 +126,9 @@ export class GmailProvider extends BaseEmailProvider {
         canRename: label.type === 'user'
       }));
 
-      return this.createSuccessResponse(folders, {
-        total: folders.length,
-        limit: folders.length,
-        offset: 0,
-        hasMore: false
-      });
+      return folders;
     } catch (error) {
-      return this.createErrorResponse('FETCH_FOLDERS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -161,12 +156,7 @@ export class GmailProvider extends BaseEmailProvider {
       const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
       
       if (!data.messages) {
-        return this.createSuccessResponse([], {
-          total: 0,
-          limit,
-          offset,
-          hasMore: false
-        });
+        return [];
       }
 
       const emailPromises = data.messages.slice(offset, offset + limit).map((message) =>
@@ -174,17 +164,11 @@ export class GmailProvider extends BaseEmailProvider {
       );
 
       const emailResults = await Promise.all(emailPromises);
-      const emails = emailResults.filter(result => result.success).map(result => result.data);
+      const emails = emailResults.filter(email => email != null);
       
-      return this.createSuccessResponse(emails, {
-        total: data.resultSizeEstimate || emails.length,
-        limit,
-        offset,
-        hasMore: data.messages.length > offset + limit,
-        nextPageToken: data.nextPageToken
-      });
+      return emails;
     } catch (error) {
-      return this.createErrorResponse('FETCH_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -243,15 +227,18 @@ export class GmailProvider extends BaseEmailProvider {
       const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
       
       if (!data.messages) {
-        return this.createSuccessResponse([], {
-          total: 0,
-          limit,
-          offset,
-          hasMore: false,
-          currentPage: Math.floor(offset / limit) + 1,
-          totalPages: 0,
-          nextOffset: null
-        });
+        return {
+          emails: [],
+          metadata: {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false,
+            currentPage: Math.floor(offset / limit) + 1,
+            totalPages: 0,
+            nextOffset: null
+          }
+        };
       }
 
       // Apply offset manually since Gmail doesn't support native offset
@@ -261,7 +248,7 @@ export class GmailProvider extends BaseEmailProvider {
       );
 
       const emailResults = await Promise.all(emailPromises);
-      let emails = emailResults.filter(result => result.success).map(result => result.data);
+      let emails = emailResults.filter(email => email != null);
       
       // Apply sorting (Gmail returns by relevance/date by default)
       if (sortBy !== 'date' || sortOrder === 'asc') {
@@ -271,18 +258,21 @@ export class GmailProvider extends BaseEmailProvider {
       const total = data.resultSizeEstimate || data.messages.length;
       const hasMore = offset + limit < total;
 
-      return this.createSuccessResponse(emails, {
-        total,
-        limit,
-        offset,
-        hasMore,
-        currentPage: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        nextOffset: hasMore ? offset + limit : null,
-        nextPageToken: data.nextPageToken
-      });
+      return {
+        emails,
+        metadata: {
+          total,
+          limit,
+          offset,
+          hasMore,
+          currentPage: Math.floor(offset / limit) + 1,
+          totalPages: Math.ceil(total / limit),
+          nextOffset: hasMore ? offset + limit : null,
+          nextPageToken: data.nextPageToken
+        }
+      };
     } catch (error) {
-      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -324,9 +314,9 @@ export class GmailProvider extends BaseEmailProvider {
       );
       
       const email = this.parseGmailMessage(data, folderId);
-      return this.createSuccessResponse(email);
+      return email;
     } catch (error) {
-      return this.createErrorResponse('FETCH_EMAIL_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -478,12 +468,15 @@ export class GmailProvider extends BaseEmailProvider {
       const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
       
       if (!data.messages) {
-        return this.createSuccessResponse([], {
-          total: 0,
-          limit,
-          offset,
-          hasMore: false
-        });
+        return {
+          emails: [],
+          metadata: {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false
+          }
+        };
       }
 
       const emailPromises = data.messages.slice(offset, offset + limit).map((message) =>
@@ -491,57 +484,61 @@ export class GmailProvider extends BaseEmailProvider {
       );
 
       const emailResults = await Promise.all(emailPromises);
-      const emails = emailResults.filter(result => result.success).map(result => result.data);
+      const emails = emailResults.filter(email => email != null);
       
-      return this.createSuccessResponse(emails, {
-        total: data.resultSizeEstimate || emails.length,
-        limit,
-        offset,
-        hasMore: data.messages.length > offset + limit
-      });
+      return {
+        emails,
+        metadata: {
+          total: data.resultSizeEstimate || emails.length,
+          limit,
+          offset,
+          hasMore: data.messages.length > offset + limit
+        }
+      };
     } catch (error) {
-      return this.createErrorResponse('SEARCH_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
   async searchThreads(query) {
-    const emails = await this.searchEmails(query);
+    const searchResult = await this.searchEmails(query);
+    const emails = searchResult.emails || searchResult; // Handle both wrapped and raw responses
     return this.buildThreads(emails);
   }
 
   async markAsRead(request) {
     try {
       await this.updateLabels(request.messageIds, [], ['UNREAD']);
-      return this.createSuccessResponse({ updated: request.messageIds.length });
+      return { updated: request.messageIds.length };
     } catch (error) {
-      return this.createErrorResponse('MARK_READ_ERROR', error.message, error);
+      throw error;
     }
   }
 
   async markAsUnread(request) {
     try {
       await this.updateLabels(request.messageIds, ['UNREAD'], []);
-      return this.createSuccessResponse({ updated: request.messageIds.length });
+      return { updated: request.messageIds.length };
     } catch (error) {
-      return this.createErrorResponse('MARK_UNREAD_ERROR', error.message, error);
+      throw error;
     }
   }
 
   async markAsFlagged(request) {
     try {
       await this.updateLabels(request.messageIds, ['STARRED'], []);
-      return this.createSuccessResponse({ updated: request.messageIds.length });
+      return { updated: request.messageIds.length };
     } catch (error) {
-      return this.createErrorResponse('MARK_FLAGGED_ERROR', error.message, error);
+      throw error;
     }
   }
 
   async markAsUnflagged(request) {
     try {
       await this.updateLabels(request.messageIds, [], ['STARRED']);
-      return this.createSuccessResponse({ updated: request.messageIds.length });
+      return { updated: request.messageIds.length };
     } catch (error) {
-      return this.createErrorResponse('MARK_UNFLAGGED_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -558,17 +555,20 @@ export class GmailProvider extends BaseEmailProvider {
     });
   }
 
-  async deleteEmails(messageIds, folder) {
-    const batchRequest = { ids: messageIds };
+  async deleteEmails(request) {
+    const batchRequest = { ids: request.messageIds };
     
     await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchDelete', {
       method: 'POST',
       body: JSON.stringify(batchRequest)
     });
+    
+    return { deleted: request.messageIds.length };
   }
 
-  async moveEmails(messageIds, fromFolder, toFolder) {
-    await this.updateLabels(messageIds, [toFolder], [fromFolder]);
+  async moveEmails(request) {
+    await this.updateLabels(request.messageIds, [request.destinationFolder], [request.sourceFolder]);
+    return { moved: request.messageIds.length };
   }
 
   async sendEmail(request) {
@@ -581,9 +581,9 @@ export class GmailProvider extends BaseEmailProvider {
         body: JSON.stringify({ raw: encodedEmail })
       });
 
-      return this.createSuccessResponse({ messageId: data.id, id: data.id });
+      return { messageId: data.id, id: data.id };
     } catch (error) {
-      return this.createErrorResponse('SEND_EMAIL_ERROR', error.message, error);
+      throw error;
     }
   }
 

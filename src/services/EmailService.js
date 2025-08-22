@@ -3,7 +3,6 @@ import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
 import { Email } from '../models/Email.js';
 import { AuthService } from './AuthService.js';
-import { createApiResponse, createApiError } from '../interfaces/EmailInterfaces.js';
 
 export class EmailService {
   providers = new Map();
@@ -101,7 +100,6 @@ export class EmailService {
 
       if (cachedEmails.length > 0) {
         return {
-          success: true,
           data: cachedEmails.map(this.convertToInterface),
           metadata: {
             total: cachedEmails.length,
@@ -116,7 +114,7 @@ export class EmailService {
 
     // Fetch from provider and cache
     const response = await provider.getEmails(request);
-    if (response.success) {
+    if (response.data) {
       await this.cacheEmails(response.data, userId, accountId);
     }
     
@@ -172,13 +170,12 @@ export class EmailService {
       // Fetch from provider with enhanced request
       const response = await provider.listEmails(request);
       
-      if (response.success) {
+      if (response.data) {
         // Cache emails for future use
         await this.cacheEmails(response.data, userId, accountId);
         
         // Ensure consistent response format
         return {
-          success: true,
           data: response.data,
           metadata: {
             total: response.metadata?.total || response.data.length,
@@ -199,14 +196,10 @@ export class EmailService {
       return response;
     } catch (error) {
       console.error('Error in listEmails:', error);
-      return {
-        success: false,
-        error: {
-          code: 'LIST_EMAILS_ERROR',
-          message: error.message,
-          provider: provider.config?.type || 'unknown'
-        }
-      };
+      const listError = new Error(error.message);
+      listError.code = 'LIST_EMAILS_ERROR';
+      listError.provider = provider.config?.type || 'unknown';
+      throw listError;
     }
   }
 
@@ -237,7 +230,6 @@ export class EmailService {
 
       if (cachedEmails.length > 0) {
         return {
-          success: true,
           data: cachedEmails.map(this.convertToInterface),
           metadata: {
             total: totalCount,
@@ -278,12 +270,15 @@ export class EmailService {
     if (!capabilities.supportsThreading) {
       // Fall back to grouping emails by subject
       const emailsResponse = await this.getEmails(accountId, userId, request, false);
-      if (emailsResponse.success) {
+      if (emailsResponse.data) {
         const threads = this.buildThreadsFromEmails(emailsResponse.data);
-        return createApiResponse(threads, {
-          ...emailsResponse.metadata,
-          provider: provider.config?.type || 'unknown'
-        });
+        return {
+          data: threads,
+          metadata: {
+            ...emailsResponse.metadata,
+            provider: provider.config?.type || 'unknown'
+          }
+        };
       }
       return emailsResponse;
     }
@@ -309,13 +304,16 @@ export class EmailService {
     if (!capabilities.supportsSearch) {
       // Fall back to local search
       const results = await this.searchEmailsLocally(userId, accountId, request);
-      return createApiResponse(results, {
-        total: results.length,
-        limit: request.limit || 50,
-        offset: request.offset || 0,
-        hasMore: false,
-        provider: provider.config?.type || 'unknown'
-      });
+      return {
+        data: results,
+        metadata: {
+          total: results.length,
+          limit: request.limit || 50,
+          offset: request.offset || 0,
+          hasMore: false,
+          provider: provider.config?.type || 'unknown'
+        }
+      };
     }
 
     return provider.searchEmails(request);
@@ -328,7 +326,7 @@ export class EmailService {
     }
     
     const response = await provider.markAsRead(request);
-    if (response.success) {
+    if (response.data) {
       await this.updateEmailFlags(request.messageIds, { seen: true });
     }
     return response;
@@ -341,7 +339,7 @@ export class EmailService {
     }
     
     const response = await provider.markAsUnread(request);
-    if (response.success) {
+    if (response.data) {
       await this.updateEmailFlags(request.messageIds, { seen: false });
     }
     return response;
@@ -354,7 +352,7 @@ export class EmailService {
     }
     
     const response = await provider.markAsFlagged(request);
-    if (response.success) {
+    if (response.data) {
       await this.updateEmailFlags(request.messageIds, { flagged: true });
     }
     return response;
@@ -367,7 +365,7 @@ export class EmailService {
     }
     
     const response = await provider.markAsUnflagged(request);
-    if (response.success) {
+    if (response.data) {
       await this.updateEmailFlags(request.messageIds, { flagged: false });
     }
     return response;
@@ -380,10 +378,13 @@ export class EmailService {
     }
     
     const response = await provider.deleteEmails(messageIds, folder);
-    if (response && response.success) {
+    if (response && response.data) {
       await this.updateEmailFlags(messageIds, { deleted: true });
     }
-    return response || createApiResponse({ deleted: messageIds.length }, { provider: provider.config?.type || 'unknown' });
+    return response || {
+      data: { deleted: messageIds.length },
+      metadata: { provider: provider.config?.type || 'unknown' }
+    };
   }
 
   async moveEmails(accountId, messageIds, fromFolder, toFolder, userId = null) {
@@ -393,14 +394,17 @@ export class EmailService {
     }
     
     const response = await provider.moveEmails(messageIds, fromFolder, toFolder);
-    if (response && response.success) {
+    if (response && response.data) {
       // Update local cache
       await Email.updateMany(
         { messageId: { $in: messageIds } },
         { $set: { folder: toFolder } }
       );
     }
-    return response || createApiResponse({ moved: messageIds.length }, { provider: provider.config?.type || 'unknown' });
+    return response || {
+      data: { moved: messageIds.length },
+      metadata: { provider: provider.config?.type || 'unknown' }
+    };
   }
 
   async sendEmail(accountId, request, userId = null) {
@@ -411,7 +415,10 @@ export class EmailService {
     
     const capabilities = provider.getCapabilities();
     if (!capabilities.supportsSending) {
-      return createApiError('SENDING_NOT_SUPPORTED', 'Provider does not support sending emails', null, provider.config?.type || 'unknown');
+      const error = new Error('Provider does not support sending emails');
+      error.code = 'SENDING_NOT_SUPPORTED';
+      error.provider = provider.config?.type || 'unknown';
+      throw error;
     }
     
     return provider.sendEmail(request);
@@ -444,14 +451,14 @@ export class EmailService {
     try {
       // Get all folders
       const foldersResponse = await provider.getFolders();
-      const folders = foldersResponse.success ? foldersResponse.data : [];
+      const folders = foldersResponse.data || [];
       
       let syncedCount = 0;
       // Sync each folder
       for (const folder of folders) {
         try {
           const emailsResponse = await provider.getEmails({ folderId: folder.id || folder.name, limit: 100 });
-          if (emailsResponse.success) {
+          if (emailsResponse.data) {
             await this.cacheEmails(emailsResponse.data, userId, accountId);
             syncedCount += emailsResponse.data.length;
           }
@@ -460,13 +467,20 @@ export class EmailService {
         }
       }
       
-      return createApiResponse({ synced: syncedCount, folders: folders.length }, {
-        provider: provider.config?.type || 'unknown',
-        timestamp: new Date()
-      });
+      return {
+        data: { synced: syncedCount, folders: folders.length },
+        metadata: {
+          provider: provider.config?.type || 'unknown',
+          timestamp: new Date()
+        }
+      };
     } catch (error) {
       console.error(`Error syncing account ${accountId}:`, error);
-      return createApiError('SYNC_ERROR', error.message, error, provider.config?.type || 'unknown');
+      const syncError = new Error(error.message);
+      syncError.code = 'SYNC_ERROR';
+      syncError.provider = provider.config?.type || 'unknown';
+      syncError.details = error;
+      throw syncError;
     }
   }
 

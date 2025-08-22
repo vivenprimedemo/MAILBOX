@@ -159,15 +159,9 @@ export class OutlookProvider extends BaseEmailProvider {
 
       const emails = messages.value.map(message => this.parseOutlookMessage(message, folder));
       
-      return this.createSuccessResponse(emails, {
-        total: messages['@odata.count'] || emails.length,
-        limit,
-        offset,
-        hasMore: messages['@odata.nextLink'] ? true : false,
-        nextLink: messages['@odata.nextLink']
-      });
+      return emails;
     } catch (error) {
-      return this.createErrorResponse('FETCH_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -262,18 +256,21 @@ export class OutlookProvider extends BaseEmailProvider {
       const total = messages['@odata.count'] || emails.length;
       const hasMore = offset + limit < total;
 
-      return this.createSuccessResponse(emails, {
-        total,
-        limit,
-        offset,
-        hasMore,
-        currentPage: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        nextOffset: hasMore ? offset + limit : null,
-        nextLink: messages['@odata.nextLink']
-      });
+      return {
+        emails,
+        metadata: {
+          total,
+          limit,
+          offset,
+          hasMore,
+          currentPage: Math.floor(offset / limit) + 1,
+          totalPages: Math.ceil(total / limit),
+          nextOffset: hasMore ? offset + limit : null,
+          nextLink: messages['@odata.nextLink']
+        }
+      };
     } catch (error) {
-      return this.createErrorResponse('LIST_EMAILS_ERROR', error.message, error);
+      throw error;
     }
   }
 
@@ -384,8 +381,8 @@ export class OutlookProvider extends BaseEmailProvider {
     }
   }
 
-  async getThreads(folder, limit, offset) {
-    const emails = await this.getEmails(folder, limit, offset);
+  async getThreads(request) {
+    const emails = await this.getEmails(request);
     return this.buildThreads(emails);
   }
 
@@ -411,7 +408,8 @@ export class OutlookProvider extends BaseEmailProvider {
       .expand('attachments')
       .get();
 
-    return messages.value.map(message => this.parseOutlookMessage(message));
+    const emails = messages.value.map(message => this.parseOutlookMessage(message));
+    return { emails };
   }
 
   async searchThreads(query) {
@@ -419,24 +417,28 @@ export class OutlookProvider extends BaseEmailProvider {
     return this.buildThreads(emails);
   }
 
-  async markAsRead(messageIds, folder) {
-    await this.updateMessageFlags(messageIds, { isRead: true });
+  async markAsRead(request) {
+    await this.updateMessageFlags(request.messageIds, { isRead: true });
+    return { updated: request.messageIds.length };
   }
 
-  async markAsUnread(messageIds, folder) {
-    await this.updateMessageFlags(messageIds, { isRead: false });
+  async markAsUnread(request) {
+    await this.updateMessageFlags(request.messageIds, { isRead: false });
+    return { updated: request.messageIds.length };
   }
 
-  async markAsFlagged(messageIds, folder) {
-    await this.updateMessageFlags(messageIds, { 
+  async markAsFlagged(request) {
+    await this.updateMessageFlags(request.messageIds, { 
       flag: { flagStatus: 'flagged' }
     });
+    return { updated: request.messageIds.length };
   }
 
-  async markAsUnflagged(messageIds, folder) {
-    await this.updateMessageFlags(messageIds, { 
+  async markAsUnflagged(request) {
+    await this.updateMessageFlags(request.messageIds, { 
       flag: { flagStatus: 'notFlagged' }
     });
+    return { updated: request.messageIds.length };
   }
 
   async updateMessageFlags(messageIds, updateData) {
@@ -451,30 +453,32 @@ export class OutlookProvider extends BaseEmailProvider {
     await Promise.all(updatePromises);
   }
 
-  async deleteEmails(messageIds, folder) {
+  async deleteEmails(request) {
     if (!this.graphClient) {
       throw new Error('Not connected to Outlook');
     }
 
-    const deletePromises = messageIds.map(messageId =>
+    const deletePromises = request.messageIds.map(messageId =>
       this.graphClient.api(`/me/messages/${messageId}`).delete()
     );
 
     await Promise.all(deletePromises);
+    return { deleted: request.messageIds.length };
   }
 
-  async moveEmails(messageIds, fromFolder, toFolder) {
+  async moveEmails(request) {
     if (!this.graphClient) {
       throw new Error('Not connected to Outlook');
     }
 
-    const movePromises = messageIds.map(messageId =>
+    const movePromises = request.messageIds.map(messageId =>
       this.graphClient.api(`/me/messages/${messageId}/move`).post({
-        destinationId: toFolder
+        destinationId: request.destinationFolder
       })
     );
 
     await Promise.all(movePromises);
+    return { moved: request.messageIds.length };
   }
 
   async sendEmail(options) {
@@ -520,12 +524,12 @@ export class OutlookProvider extends BaseEmailProvider {
       }));
     }
 
-    const sentMessage = await this.graphClient.api('/me/sendMail').post({
+    await this.graphClient.api('/me/sendMail').post({
       message,
       saveToSentItems: true
     });
 
-    return sentMessage;
+    return { messageId: 'sent', id: 'sent' };
   }
 
   async replyToEmail(originalMessageId, options) {
