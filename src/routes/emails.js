@@ -12,7 +12,7 @@ const router = Router();
 // router.use(authenticateToken);
 
 // Email Account Management Routes
-router.get('/accounts', EmailController.getEmailAccounts);
+router.get('/accounts/:userId', EmailController.getEmailAccounts);
 router.post('/accounts', validate(schemas.addEmailAccount), EmailController.addEmailAccount);
 router.put('/accounts/:accountId', validate(schemas.updateEmailAccount), EmailController.updateEmailAccount);
 router.delete('/accounts/:accountId', EmailController.removeEmailAccount);

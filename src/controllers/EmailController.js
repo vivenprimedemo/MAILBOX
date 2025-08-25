@@ -2,6 +2,7 @@
 import { EmailService } from '../services/EmailService.js';
 import { AuthService } from '../services/AuthService.js';
 import { logger } from '../config/logger.js';
+import { EmailConfig } from '../models/Email.js';
 
 export class EmailController {
   static emailService = new EmailService();
@@ -659,7 +660,8 @@ export class EmailController {
   // Email Account Management
   static async getEmailAccounts(req, res) {
     try {
-      const accounts = await AuthService.getEmailAccounts(req.userId);
+      // const accounts = await AuthService.getEmailAccounts(req.userId);
+      const accounts = await EmailConfig.find({ user_id: req.params.userId }).select('-__v -oauth_config -smtp_config -imap_config');
 
       res.json({
         success: true,
