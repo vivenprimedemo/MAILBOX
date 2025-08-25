@@ -39,6 +39,7 @@ export class EmailService {
             const email_config = await EmailConfig.findOne({ _id: accountId });
             const email_provider = email_config?.provider;
             const provider_config = {
+                id: accountId,
                 type: email_provider,
                 auth: {
                     user: email_config?.email,

@@ -76,6 +76,8 @@ export class GmailProvider extends BaseEmailProvider {
       const { credentials } = await oauth2Client.refreshAccessToken(); // uses fetch internally
       this.accessToken = credentials.access_token;
       this.refreshToken = credentials.refresh_token;
+
+      await this.updateEmailAccessToken(this.config.id, this.accessToken);
     } catch (error) {
       consoleHelper("GMAIL REFRESH ACCESS TOKEN FAILED", error);
       throw error;

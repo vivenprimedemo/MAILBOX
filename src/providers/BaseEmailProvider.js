@@ -6,6 +6,7 @@ import {
   createEmailFlags,
   ProviderCapabilities
 } from '../interfaces/EmailInterfaces.js';
+import { AuthService } from '../services/AuthService.js';
 
 export class BaseEmailProvider {
   config;
@@ -326,5 +327,9 @@ export class BaseEmailProvider {
    */
   createStandardFlags(flags) {
     return createEmailFlags(flags);
+  }
+
+  async updateEmailAccessToken(accountId, accessToken) {
+    return AuthService.updateEmailAccessToken(accountId, accessToken);
   }
 }

@@ -112,6 +112,9 @@ export class OutlookProvider extends BaseEmailProvider {
       const response = await this.msalInstance.acquireTokenByRefreshToken(tokenRequest);
       this.accessToken = response.accessToken;
 
+
+      await this.updateEmailAccessToken(this.config.id, response.accessToken);
+
       // Reinitialize Graph client with new token
       this.graphClient = Client.init({
         authProvider: (done) => {

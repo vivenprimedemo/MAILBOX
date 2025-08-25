@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
+import { EmailConfig } from '../models/Email.js';
 
 export class AuthService {
   static JWT_SECRET = config.JWT_SECRET;
@@ -265,4 +266,20 @@ export class AuthService {
 
     return this.getUserById(decoded.userId);
   }
+
+  static async updateEmailAccessToken(accountId, accessToken) {
+    const user = await EmailConfig.findById(accountId);
+    if (!user) {
+      throw new Error(`Email account not found ${accountId}`);
+    }
+
+    user.oauth_config.access_token = accessToken;
+
+    user.markModified("oauth_config");
+
+    user.updatedAt = new Date();
+    const savedUser = await user.save();
+    return savedUser;
+  }
 }
+
