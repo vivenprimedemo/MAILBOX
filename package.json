@@ -1,5 +1,5 @@
 {
-  "name": "email-client",
+  "name": "mailbox",
   "version": "1.0.0",
   "description": "Universal email client with threading support",
   "type": "module",
@@ -40,6 +40,6 @@
     "express",
     "javascript"
   ],
-  "author": "Your Name",
+  "author": "Viven",
   "license": "MIT"
 }
