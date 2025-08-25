@@ -113,21 +113,10 @@ export class GmailProvider extends BaseEmailProvider {
   async getFolders(request = {}) {
     try {
       const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
-      
       const folders = data.labels.map((label) => ({
         id: label.id,
-        name: label.id,
         displayName: label.name,
-        type: this.mapLabelType(label.id),
-        unreadCount: parseInt(label.messagesUnread) || 0,
-        totalCount: parseInt(label.messagesTotal) || 0,
-        parentId: null,
-        children: [],
-        isSystem: ['INBOX', 'SENT', 'DRAFT', 'TRASH', 'SPAM'].includes(label.id.toUpperCase()),
-        canDelete: label.type === 'user',
-        canRename: label.type === 'user'
       }));
-
       return folders;
     } catch (error) {
       throw error;
@@ -358,7 +347,7 @@ export class GmailProvider extends BaseEmailProvider {
       folderId: folderId || 'INBOX',
       provider: 'gmail',
       inReplyTo: getHeader('In-Reply-To'),
-      references: this.parseReferences(getHeader('References')?.split(' ')),
+      references: this.parseReferences(getHeader('References')?.split(/\s+/).filter(ref => ref.trim())),
       priority: 'normal',
       size: message.sizeEstimate || 0,
       isEncrypted: false,
@@ -579,9 +568,14 @@ export class GmailProvider extends BaseEmailProvider {
       const email = this.buildMimeMessage(request);
       const encodedEmail = Buffer.from(email).toString('base64url');
 
+      const requestBody = { raw: encodedEmail };
+      if (request.threadId) {
+        requestBody.threadId = request.threadId;
+      }
+
       const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
-        body: JSON.stringify({ raw: encodedEmail })
+        body: JSON.stringify(requestBody)
       });
 
       return { messageId: data.id, id: data.id };
@@ -659,21 +653,21 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     return this.sendEmail({
-      to: [originalEmail?.from?.address],
-      subject: `Re: ${originalEmail.subject}`,
+      to: [{ address: originalEmail?.from?.address, name: originalEmail?.from?.name }],
+      subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
       inReplyTo: originalEmail?.messageId,
-      references: [originalEmail?.messageId, ...(originalEmail?.references || [])],
+      references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),
+      threadId: originalEmail?.threadId,
       ...options
     });
   }
 
   async forwardEmail(originalMessageId, to, message) {
-    const originalEmailResponse = await this.getEmail(originalMessageId);
-    if (!originalEmailResponse.success || !originalEmailResponse.data) {
+    const originalEmail = await this.getEmail(originalMessageId);
+    if (!originalEmail || !originalEmail?.id) {
       throw new Error('Original email not found');
     }
 
-    const originalEmail = originalEmailResponse.data;
     const forwardedContent = `
             ${message || ''}
 

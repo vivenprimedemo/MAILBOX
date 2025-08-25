@@ -133,15 +133,8 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     const folders = await this.graphClient.api('/me/mailFolders').get();
-    
-    return folders.value.map((folder) => ({
-      name: folder.id,
-      displayName: folder.displayName,
-      type: this.mapFolderType(folder.displayName),
-      unreadCount: folder.unreadItemCount || 0,
-      totalCount: folder.totalItemCount || 0,
-      parentFolderId: folder.parentFolderId
-    }));
+
+    return folders?.value;
   }
 
   mapFolderType(displayName) {
