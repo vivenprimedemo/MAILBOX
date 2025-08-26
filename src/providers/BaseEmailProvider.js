@@ -296,6 +296,16 @@ export class BaseEmailProvider {
     throw new Error('Method must be implemented by subclass');
   }
 
+  /**
+   * Get attachment data
+   * @param {string} messageId - Message ID
+   * @param {string} attachmentId - Attachment ID
+   * @returns {Promise<ApiResponse<AttachmentData>>}
+   */
+  async getAttachment(messageId, attachmentId) {
+    throw new Error('Method must be implemented by subclass');
+  }
+
   // Helper methods for subclasses to use
   
   /**

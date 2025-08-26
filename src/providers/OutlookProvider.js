@@ -734,6 +734,16 @@ export class OutlookProvider extends BaseEmailProvider {
       throw new Error('Not connected to Outlook');
     }
 
-    return await this.graphClient.api(`/me/messages/${messageId}/attachments/${attachmentId}`).get();
+    try {
+      const attachment = await this.graphClient.api(`/me/messages/${messageId}/attachments/${attachmentId}`).get();
+      return {
+        filename: attachment.name || 'attachment',
+        contentType: attachment.contentType || 'application/octet-stream',
+        size: attachment.size || 0,
+        data: attachment.contentBytes ? Buffer.from(attachment.contentBytes, 'base64') : Buffer.alloc(0)
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch Outlook attachment: ${error.message}`);
+    }
   }
 }

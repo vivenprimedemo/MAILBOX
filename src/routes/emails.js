@@ -52,4 +52,7 @@ router.post('/accounts/:accountId/forward/:messageId', emailSendLimiter, EmailCo
 // Sync operations
 router.post('/accounts/:accountId/sync', EmailController.syncAccount);
 
+// Attachment operations
+router.get('/accounts/:accountId/message/:messageId/attachment/:attachmentId', EmailController.getAttachment);
+
 export default router;

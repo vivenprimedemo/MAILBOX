@@ -628,12 +628,17 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     // Attachments
-    if (request.attachments?.length) {
+    if (request.attachments?.length > 0) {
       for (const attachment of request.attachments) {
         message += `--${boundary}\r\n`;
         message += `Content-Type: ${attachment.contentType || 'application/octet-stream'}\r\n`;
         message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
         message += `Content-Transfer-Encoding: base64\r\n\r\n`;
+        
+        if (!attachment.content) {
+          console.error(`Attachment ${attachment.filename} has no content data`);
+          continue;
+        }
         
         const content = Buffer.isBuffer(attachment.content) 
           ? attachment.content 
@@ -669,26 +674,54 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     const forwardedContent = `
-            ${message || ''}
+            ${message || ""}
 
             ---------- Forwarded message ---------
-            From: ${originalEmail.from.name ? `"${originalEmail.from.name}" ` : ''}<${originalEmail.from.address}>
+            From: ${
+              originalEmail.from.name ? `"${originalEmail.from.name}" ` : ""
+            }<${originalEmail.from.address}>
             Date: ${originalEmail.date.toLocaleString()}
             Subject: ${originalEmail.subject}
-            To: ${originalEmail.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}
+            To: ${originalEmail.to
+              .map(
+                (addr) =>
+                  `${addr.name ? `"${addr.name}" ` : ""}<${addr.address}>`
+              )
+              .join(", ")}
 
-            ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
+            ${originalEmail.bodyText || originalEmail.bodyHtml || ""}
           `;
+
+    // Fetch attachment data for each attachment
+    let attachmentsWithData = [];
+    if (originalEmail.attachments && originalEmail.attachments.length > 0) {
+      attachmentsWithData = await Promise.all(
+        originalEmail.attachments.map(async (att) => {
+          try {
+            const attachmentData = await this.getAttachment(
+              originalEmail.id,
+              att.attachmentId
+            );
+            return {
+              filename: att.filename,
+              content: attachmentData.data,
+              contentType: att.contentType,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch attachment ${att.filename}:`, error);
+            return null;
+          }
+        })
+      );
+      // Filter out failed attachments
+      attachmentsWithData = attachmentsWithData.filter((att) => att !== null);
+    }
 
     return this.sendEmail({
       to,
       subject: `Fwd: ${originalEmail.subject}`,
       bodyText: forwardedContent,
-      attachments: originalEmail.attachments?.map(att => ({
-        filename: att.filename,
-        content: att.data,
-        contentType: att.contentType
-      }))
+      attachments: attachmentsWithData,
     });
   }
 
@@ -696,5 +729,26 @@ export class GmailProvider extends BaseEmailProvider {
     // Gmail doesn't support IDLE, but we can implement polling
     // This would typically be handled by webhooks in a production environment
     console.log(`Sync not implemented for Gmail - use webhooks for real-time updates`);
+  }
+
+  async getAttachment(messageId, attachmentId) {
+    try {
+      if (!this.accessToken) {
+        throw new Error('Not authenticated');
+      }
+
+      const data = await this.makeGmailRequest(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`
+      );
+
+      return {
+        filename: data.filename || 'attachment',
+        contentType: data.contentType || 'application/octet-stream',
+        size: data.size || 0,
+        data: Buffer.from(data.data, 'base64')
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch Gmail attachment: ${error.message}`);
+    }
   }
 }

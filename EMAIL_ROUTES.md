@@ -429,6 +429,54 @@ PUT /emails/accounts/:accountId/emails/move
 
 ---
 
+## 📎 Attachment Operations
+
+### Download Attachment
+```
+GET /emails/accounts/:accountId/emails/:messageId/attachments/:attachmentId
+```
+
+**Parameters:**
+- `accountId` (path) - Email account ID
+- `messageId` (path) - Message ID containing the attachment
+- `attachmentId` (path) - Attachment ID (from email's attachments array)
+
+**Response:**
+Returns binary attachment data with appropriate headers:
+- `Content-Type`: Attachment MIME type (e.g., `application/pdf`, `image/jpeg`)
+- `Content-Disposition`: `attachment; filename="filename.ext"`
+- `Content-Length`: File size in bytes
+
+**Example Request:**
+```bash
+curl -X GET "http://localhost:3000/api/emails/accounts/acc_123/emails/msg_456/attachments/att_789" \
+  -H "Authorization: Bearer your-jwt-token" \
+  --output downloaded-file.pdf
+```
+
+**Error Response (if attachment not found):**
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "ATTACHMENT_NOT_FOUND",
+    "message": "Attachment not found",
+    "provider": "gmail",
+    "timestamp": "2024-01-15T14:30:00.000Z"
+  },
+  "metadata": {}
+}
+```
+
+**Notes:**
+- Supports both Gmail and Outlook attachments
+- Downloads the actual file content, not JSON data
+- Use appropriate tools (curl --output, fetch with blob handling, etc.) to save the file
+- Attachment IDs are found in the email's `attachments` array when fetching emails
+
+---
+
 ## 🧵 Threading Operations
 
 ### Get Threads
@@ -652,6 +700,13 @@ curl -X PUT "http://localhost:3000/api/emails/accounts/acc_123/emails/read" \
   }'
 ```
 
+**Download Attachment:**
+```bash
+curl -X GET "http://localhost:3000/api/emails/accounts/acc_123/emails/msg_456/attachments/att_789" \
+  -H "Authorization: Bearer your-jwt-token" \
+  --output downloaded-file.pdf
+```
+
 ---
 
 ## 🧪 Postman Collection
@@ -720,6 +775,13 @@ Import this collection for easy testing:
             }
           }
         }
+      }
+    },
+    {
+      "name": "Download Attachment",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/emails/accounts/{{account_id}}/emails/{{message_id}}/attachments/{{attachment_id}}"
       }
     }
   ]

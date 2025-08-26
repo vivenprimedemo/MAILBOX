@@ -826,4 +826,63 @@ export class EmailController {
       });
     }
   }
+
+  static async getAttachment(req, res) {
+    try {
+      const { accountId, messageId, attachmentId } = req.params;
+
+      const result = await EmailController.emailService.getAttachment(
+        accountId,
+        messageId,
+        attachmentId,
+        req.userId
+      );
+
+      if (!result) {
+        res.status(404).json({
+          success: false,
+          error: {
+            code: 'ATTACHMENT_NOT_FOUND',
+            message: 'Attachment not found',
+            provider: '',
+            timestamp: new Date()
+          },
+          data: null,
+          metadata: {}
+        });
+        return;
+      }
+
+      // Set appropriate headers for file download
+      res.setHeader('Content-Type', result.contentType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.setHeader('Content-Length', result.size || result.data.length);
+      
+      // Send the binary data
+      res.send(result.data);
+    } catch (error) {
+      logger.error('Failed to get attachment', { 
+        error: error.message, 
+        stack: error.stack, 
+        accountId: req.params.accountId, 
+        messageId: req.params.messageId,
+        attachmentId: req.params.attachmentId 
+      });
+      
+      const errorCode = error.code || 'FETCH_ATTACHMENT_ERROR';
+      const statusCode = errorCode === 'PROVIDER_INITIALIZATION_FAILED' ? 422 : 500;
+      
+      res.status(statusCode).json({
+        success: false,
+        data: null,
+        error: {
+          code: errorCode,
+          message: error instanceof Error ? error.message : 'Failed to get attachment',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
+      });
+    }
+  }
 }
