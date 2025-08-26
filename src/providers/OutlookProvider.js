@@ -132,7 +132,9 @@ export class OutlookProvider extends BaseEmailProvider {
       throw new Error('Not connected to Outlook');
     }
 
-    const folders = await this.graphClient.api('/me/mailFolders').get();
+    const folders = await this.graphClient.api('/me/mailFolders')
+    .top(100)
+    .get();
 
     return folders?.value;
   }
