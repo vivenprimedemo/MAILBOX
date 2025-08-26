@@ -209,9 +209,17 @@ export class OutlookProvider extends BaseEmailProvider {
 
       // Apply search filters using OData $filter
       const filters = [];
-      
+
+      // Handle search using Microsoft Graph Search API instead of filters
+      // as filters with contains() are often too complex for Graph API
+      let isUsingSearch = false;
       if (search) {
-        filters.push(`contains(subject,'${search}') or contains(body/content,'${search}')`);
+        const searchQuery = this.buildSearchQuery(search);
+        if (searchQuery) {
+          // Use the search() API instead of filter()
+          query = query.search(searchQuery);
+          isUsingSearch = true;
+        }
       }
       if (from) {
         filters.push(`from/emailAddress/address eq '${from}'`);
@@ -247,20 +255,31 @@ export class OutlookProvider extends BaseEmailProvider {
         filters.push(`receivedDateTime le ${dateTo.toISOString()}`);
       }
 
-      if (filters.length > 0) {
-        query = query.filter(filters.join(' and '));
+      // Only apply filters if we're not using the search API
+      if (filters.length > 0 && !isUsingSearch) {
+        const filterString = filters.join(' and ');
+        query = query.filter(filterString);
       }
 
       // Apply sorting
       const sortField = this.mapSortField(sortBy);
       const orderByClause = `${sortField} ${sortOrder}`;
-      
-      query = query
-        .top(limit)
-        .skip(offset)
-        .expand('attachments')
-        .orderby(orderByClause)
-        .count(true); // Include total count
+
+      // Configure query with different options based on search vs filter
+      if (isUsingSearch) {
+        // When using search, $skip is not supported, only $top and $orderby work differently
+        query = query
+          .top(limit)
+          .expand('attachments');
+        // Note: orderby and count might also have limitations with search
+      } else {
+        query = query
+          .top(limit)
+          .skip(offset)
+          .expand('attachments')
+          .orderby(orderByClause)
+          .count(true); // Include total count
+      }
 
       const messages = await query.get();
       const emails = messages.value.map(message => this.parseOutlookMessage(message, folderId));
@@ -284,6 +303,100 @@ export class OutlookProvider extends BaseEmailProvider {
     } catch (error) {
       throw error;
     }
+  }
+
+  buildSearchQuery(search) {
+    // Microsoft Graph Search API doesn't support field directives like "subject:value"
+    // We need to extract just the search term from subject:WATCHER format
+
+    // Regular expression to match search directives like "subject:value" or "from:value"  
+    const directiveRegex = /(subject|from|to|body):\s*"([^"]+)"|(\w+):\s*(\S+)/gi;
+    let match;
+    const searchTerms = [];
+    let remainingSearch = search;
+
+    // Parse directives and extract just the values for searching
+    while ((match = directiveRegex.exec(search)) !== null) {
+      const directive = match[1] || match[3];
+      let value = match[2] || match[4];
+
+      // Handle email addresses specially - extract meaningful search terms
+      if (directive && (directive.toLowerCase() === 'from' || directive.toLowerCase() === 'to')) {
+        // For email searches, try to extract meaningful search terms
+        if (value.includes('@')) {
+          const emailParts = value.split('@');
+          const username = emailParts[0];
+          const domain = emailParts[1];
+
+          // Use the username part for search (more likely to be meaningful)
+          // Remove common prefixes like "noreply", "no-reply", etc.
+          if (username && !username.match(/^(noreply|no-reply|donotreply|support|info|admin)$/i)) {
+            searchTerms.push(username);
+          } else if (domain) {
+            // If username is generic, use domain name without TLD
+            const domainName = domain.split('.')[0];
+            if (domainName && domainName.length > 2) {
+              searchTerms.push(domainName);
+            }
+          }
+        } else {
+          searchTerms.push(value);
+        }
+      } else {
+        // For non-email searches (subject, body), use the value directly
+        searchTerms.push(value);
+      }
+
+      // Remove the matched directive from the remaining search
+      remainingSearch = remainingSearch.replace(match[0], '').trim();
+    }
+
+    // Add any remaining non-directive search terms
+    if (remainingSearch) {
+      searchTerms.push(remainingSearch);
+    }
+
+    // If we have search terms, join them
+    if (searchTerms.length > 0) {
+      return searchTerms.join(' ');
+    }
+
+    // Fallback to the original search term if no parsing was successful
+    return search;
+  }
+
+  parseSearchDirectives(search) {
+    const filters = [];
+
+    // Regular expression to match search directives like "subject:value" or "from:value"
+    const directiveRegex = /(subject|from|to|body):\s*"([^"]+)"|(\w+):\s*(\S+)/gi;
+    let match;
+    let hasDirectives = false;
+
+    while ((match = directiveRegex.exec(search)) !== null) {
+      hasDirectives = true;
+      const directive = match[1] || match[3];
+      const value = match[2] || match[4];
+
+      switch (directive.toLowerCase()) {
+        case 'subject':
+          filters.push(`contains(subject,'${value}')`);
+          break;
+        case 'from':
+          filters.push(`contains(from/emailAddress/address,'${value}') or contains(from/emailAddress/name,'${value}')`);
+          break;
+        case 'to':
+          filters.push(`toRecipients/any(r:contains(r/emailAddress/address,'${value}') or contains(r/emailAddress/name,'${value}'))`);
+          break;
+        case 'body':
+          filters.push(`contains(body/content,'${value}')`);
+          break;
+      }
+    }
+
+    // If no directives were found but there's still search text, return empty array
+    // to trigger the fallback generic search
+    return hasDirectives ? filters : [];
   }
 
   mapSortField(sortBy) {
