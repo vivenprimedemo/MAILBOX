@@ -361,7 +361,20 @@ export class OutlookProvider extends BaseEmailProvider {
       return searchTerms.join(' ');
     }
 
-    // Fallback to the original search term if no parsing was successful
+
+    if (search && search.trim()) {
+      const trimmedSearch = search.trim();
+
+      // For multi-word searches, handle based on word lengths
+      // Very short words (like single letters) work better without quotes
+      if (trimmedSearch.includes(' ') && !trimmedSearch.startsWith('"') && !trimmedSearch.endsWith('"')) {
+        // Use flexible matching without quotes for better results
+        return trimmedSearch;
+      }
+
+      return trimmedSearch;
+    }
+
     return search;
   }
 
