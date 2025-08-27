@@ -341,6 +341,187 @@ export class IMAPProvider extends BaseEmailProvider {
     }
   }
 
+  async listEmailsV2(request) {
+    try {
+      const {
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        nextPage
+      } = request;
+
+      return new Promise((resolve, reject) => {
+        if (!this.imapClient) {
+          reject(new Error('Not connected'));
+          return;
+        }
+
+        this.imapClient.openBox(folderId, true, (err, box) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const total = box.messages.total;
+          
+          // Build search criteria for IMAP
+          let searchCriteria = ['ALL'];
+          
+          if (search) {
+            searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
+          }
+          if (from) searchCriteria.push(['FROM', from]);
+          if (to) searchCriteria.push(['TO', to]);
+          if (subject) searchCriteria.push(['SUBJECT', subject]);
+          if (hasAttachment === true) searchCriteria.push(['HEADER', 'content-type', 'multipart']);
+          if (isUnread === true) searchCriteria.push('UNSEEN');
+          if (isUnread === false) searchCriteria.push('SEEN');
+          if (isFlagged === true) searchCriteria.push('FLAGGED');
+          if (isFlagged === false) searchCriteria.push('UNFLAGGED');
+
+          // Add date filters
+          if (dateFrom) {
+            const fromStr = dateFrom.toDateString();
+            searchCriteria.push(['SINCE', fromStr]);
+          }
+          if (dateTo) {
+            const toStr = dateTo.toDateString();
+            searchCriteria.push(['BEFORE', toStr]);
+          }
+
+          // Handle token-based pagination
+          let startIndex = 0;
+          if (nextPage) {
+            try {
+              const tokenData = JSON.parse(Buffer.from(nextPage, 'base64').toString());
+              startIndex = tokenData.lastIndex || 0;
+            } catch (error) {
+              console.error('Invalid nextPage token:', error);
+            }
+          }
+
+          this.imapClient.search(searchCriteria, (err, uids) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+
+            if (!uids || uids.length === 0) {
+              resolve({
+                emails: [],
+                metadata: {
+                  total: 0,
+                  limit,
+                  offset,
+                  hasMore: false,
+                  currentPage: 1,
+                  totalPages: 0,
+                  nextOffset: null
+                }
+              });
+              return;
+            }
+
+            // Apply token-based pagination to UIDs
+            const paginatedUids = uids.slice(startIndex, startIndex + limit);
+            
+            if (paginatedUids.length === 0) {
+              resolve({
+                emails: [],
+                metadata: {
+                  total: uids.length,
+                  limit,
+                  offset: nextPage ? 0 : 0, // Keep for compatibility
+                  hasMore: false,
+                  currentPage: nextPage ? 1 : 1, // Keep for compatibility
+                  totalPages: Math.ceil(uids.length / limit), // Calculated from total
+                  nextOffset: null, // not used in token pagination
+                  nextPage: null
+                }
+              });
+              return;
+            }
+
+            const fetch = this.imapClient.fetch(paginatedUids, {
+              bodies: '',
+              struct: true,
+              markSeen: false
+            });
+
+            const emails = [];
+
+            fetch.on('message', (msg, uid) => {
+              let buffer = '';
+
+              msg.on('body', (stream, info) => {
+                stream.on('data', (chunk) => {
+                  buffer += chunk.toString('utf8');
+                });
+
+                stream.once('end', async () => {
+                  try {
+                    const parsed = await simpleParser(buffer);
+                    const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
+                    emails.push(email);
+                  } catch (error) {
+                    console.error('Error parsing email:', error);
+                  }
+                });
+              });
+            });
+
+            fetch.once('error', reject);
+            fetch.once('end', () => {
+              // Apply sorting
+              const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
+              
+              const hasMore = startIndex + limit < uids.length;
+              let nextToken = null;
+              
+              if (hasMore) {
+                // Create next page token
+                const tokenData = {
+                  lastIndex: startIndex + limit,
+                  folderId,
+                  search,
+                  filters: { isUnread, isFlagged, hasAttachment, from, to, subject, dateFrom, dateTo }
+                };
+                nextToken = Buffer.from(JSON.stringify(tokenData)).toString('base64');
+              }
+              
+              resolve({
+                emails: sortedEmails,
+                metadata: {
+                  total: uids.length,
+                  limit,
+                  offset: nextPage ? startIndex : 0, // Keep for compatibility
+                  hasMore,
+                  currentPage: nextPage ? Math.floor(startIndex / limit) + 1 : 1, // Keep for compatibility
+                  totalPages: Math.ceil(uids.length / limit), // Calculated from total
+                  nextOffset: null, // not used in token pagination
+                  nextPage: nextToken
+                }
+              });
+            });
+          });
+        });
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
   sortEmails(emails, sortBy, sortOrder) {
     return emails.sort((a, b) => {
       let aVal, bVal;

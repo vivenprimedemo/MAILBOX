@@ -307,6 +307,209 @@ export class OutlookProvider extends BaseEmailProvider {
     }
   }
 
+  async listEmailsV2(request) {
+    try {
+      const {
+        folderId = 'inbox',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        nextPage
+      } = request;
+
+      if (!this.graphClient) {
+        throw new Error('Not connected to Outlook');
+      }
+
+      let query;
+      
+      // Use nextPage (Microsoft Graph nextLink) if provided for pagination
+      if (nextPage) {
+        try {
+          // Handle both full URLs and base64-encoded URLs
+          let nextLinkUrl;
+          if (nextPage.startsWith('http')) {
+            nextLinkUrl = nextPage;
+          } else {
+            // Assume it's base64-encoded
+            nextLinkUrl = Buffer.from(nextPage, 'base64').toString();
+          }
+          
+          const urlParts = new URL(nextLinkUrl);
+          // Remove the base URL to get just the API path 
+          // Example: /v1.0/me/messages?$top=10&$skip=10&$skiptoken=xxx
+          const apiPath = urlParts.pathname.replace('/v1.0', '') + urlParts.search;
+          console.log('Outlook V2: Using API path:', apiPath);
+          query = this.graphClient.api(apiPath);
+        } catch (error) {
+          console.error('Outlook V2: Invalid nextPage URL:', error);
+          throw new Error('Invalid nextPage token');
+        }
+      } else {
+        console.log('Outlook V2: No nextLink provided, fetching first page');
+        // Build query from scratch for first page
+        let endpoint = '/me/messages';
+        if (folderId && folderId !== 'inbox') {
+          endpoint = `/me/mailFolders/${folderId}/messages`;
+        }
+
+        query = this.graphClient.api(endpoint);
+
+        // Apply search filters using OData $filter
+        const filters = [];
+
+        // Handle search using Microsoft Graph Search API instead of filters
+        // as filters with contains() are often too complex for Graph API
+        let isUsingSearch = false;
+        if (search) {
+          const searchQuery = this.buildSearchQuery(search);
+          if (searchQuery) {
+            // Use the search() API instead of filter()
+            query = query.search(searchQuery);
+            isUsingSearch = true;
+          }
+        }
+
+        if (from) {
+          filters.push(`from/emailAddress/address eq '${from}'`);
+        }
+        if (to) {
+          filters.push(`toRecipients/any(r:r/emailAddress/address eq '${to}')`);
+        }
+        if (subject) {
+          filters.push(`contains(subject, '${subject.replace(/'/g, "''")}')`);
+        }
+        if (hasAttachment === true) {
+          filters.push('hasAttachments eq true');
+        }
+        if (hasAttachment === false) {
+          filters.push('hasAttachments eq false');
+        }
+        if (isUnread === true) {
+          filters.push('isRead eq false');
+        }
+        if (isUnread === false) {
+          filters.push('isRead eq true');
+        }
+        if (isFlagged === true) {
+          filters.push('flag/flagStatus ne \'notFlagged\'');
+        }
+        if (isFlagged === false) {
+          filters.push('flag/flagStatus eq \'notFlagged\'');
+        }
+
+        // Add date filters
+        if (dateFrom) {
+          const fromStr = dateFrom.toISOString();
+          filters.push(`receivedDateTime ge ${fromStr}`);
+        }
+        if (dateTo) {
+          const toStr = dateTo.toISOString();
+          filters.push(`receivedDateTime le ${toStr}`);
+        }
+
+        // Apply filters if not using search
+        if (!isUsingSearch && filters.length > 0) {
+          query = query.filter(filters.join(' and '));
+        }
+
+        // Apply sorting
+        const sortField = this.mapSortField(sortBy);
+        query = query.orderby(`${sortField} ${sortOrder}`);
+
+        // Apply pagination (only for first page, skip() not applicable with nextPageLink)
+        query = query.top(limit).skip(offset);
+
+        // Select specific fields
+        query = query.select([
+          'id',
+          'subject',
+          'bodyPreview',
+          'body',
+          'from',
+          'toRecipients',
+          'ccRecipients',
+          'bccRecipients',
+          'receivedDateTime',
+          'sentDateTime',
+          'hasAttachments',
+          'attachments',
+          'isRead',
+          'flag',
+          'conversationId',
+          'internetMessageId'
+        ]);
+      }
+
+      const messages = await query.get();
+      
+      console.log('Outlook V2: Response - message count:', messages.value?.length || 0);
+      console.log('Outlook V2: Response - nextLink:', messages['@odata.nextLink'] || 'null');
+      
+      if (!messages.value || messages.value.length === 0) {
+        return {
+          emails: [],
+          metadata: {
+            total: 0,
+            limit,
+            offset,
+            hasMore: false,
+            currentPage: Math.floor(offset / limit) + 1,
+            totalPages: 0,
+            nextOffset: null
+          }
+        };
+      }
+
+      const emails = messages.value.map(message => this.parseOutlookMessage(message, folderId));
+      
+      // For token-based pagination, provide accurate metadata
+      const hasMore = messages['@odata.nextLink'] != null;
+      const isFirstPage = !nextPage;
+      const returnedCount = emails.length;
+      
+      // Microsoft Graph doesn't provide total count in list operations
+      // We can only estimate based on the current page
+      const estimatedTotal = isFirstPage && returnedCount < limit ? returnedCount : null;
+
+      // Encode the nextLink URL to avoid validation issues with OData parameters
+      let encodedNextPage = null;
+      if (messages['@odata.nextLink']) {
+        encodedNextPage = Buffer.from(messages['@odata.nextLink']).toString('base64');
+      }
+
+      return {
+        emails,
+        metadata: {
+          // Accurate fields
+          total: estimatedTotal, // Cannot determine total with Graph API
+          limit,
+          hasMore,
+          returnedCount, // Actual number of emails returned
+          nextPage: encodedNextPage,
+          
+          // Traditional fields (approximate for token-based pagination)
+          offset: isFirstPage ? 0 : null, // Can only know for first page
+          currentPage: isFirstPage ? 1 : null, // Can only know for first page
+          totalPages: null, // Cannot determine with token pagination
+          nextOffset: null // Not used in token pagination
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
   buildSearchQuery(search) {
     // Microsoft Graph Search API doesn't support field directives like "subject:value"
     // We need to extract just the search term from subject:WATCHER format

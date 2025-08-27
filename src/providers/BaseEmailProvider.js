@@ -161,6 +161,16 @@ export class BaseEmailProvider {
   }
 
   /**
+   * List emails V2 with enhanced filtering, sorting, and pagination
+   * @param {EnhancedEmailListRequest} request - Enhanced email query parameters
+   * @returns {Promise<ApiResponse<Email[]>>}
+   */
+  async listEmailsV2(request) {
+    // Default implementation falls back to getEmails for backward compatibility
+    return this.getEmails(request);
+  }
+
+  /**
    * Get a specific email
    * @param {string} messageId - Message ID
    * @param {string} folderId - Folder ID (optional)

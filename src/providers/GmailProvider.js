@@ -267,6 +267,120 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
+  async listEmailsV2(request) {
+    try {
+      const {
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        nextPage
+      } = request;
+
+      // Build Gmail search query
+      let query = `in:${folderId}`;
+      
+      // Add search text
+      if (search) {
+        query += ` ${search}`;
+      }
+      
+      // Add filters
+      if (from) query += ` from:${from}`;
+      if (to) query += ` to:${to}`;
+      if (subject) query += ` subject:"${subject}"`;
+      if (hasAttachment) query += ' has:attachment';
+      if (isUnread === true) query += ' is:unread';
+      if (isUnread === false) query += ' -is:unread';
+      if (isFlagged === true) query += ' is:starred';
+      if (isFlagged === false) query += ' -is:starred';
+      
+      // Add date filters
+      if (dateFrom) {
+        const fromStr = dateFrom.toISOString().split('T')[0];
+        query += ` after:${fromStr}`;
+      }
+      if (dateTo) {
+        const toStr = dateTo.toISOString().split('T')[0];
+        query += ` before:${toStr}`;
+      }
+
+      const params = new URLSearchParams({
+        maxResults: limit.toString(),
+        q: query
+      });
+
+      // Add pageToken if provided for pagination
+      if (nextPage) {
+        params.append('pageToken', nextPage);
+      }
+
+      const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+      
+      if (!data.messages) {
+        return {
+          emails: [],
+          metadata: {
+            total: 0,
+            limit,
+            offset: 0,
+            hasMore: false,
+            currentPage: 1,
+            totalPages: 0,
+            nextPageToken: null
+          }
+        };
+      }
+
+      // Fetch all messages (no manual slicing since we use pageToken)
+      const emailPromises = data.messages.map((message) =>
+        this.getEmail(message.id, folderId)
+      );
+      const emailResults = await Promise.all(emailPromises);
+      let emails = emailResults.filter(email => email != null);
+      
+      // Apply sorting (Gmail returns by relevance/date by default)
+      if (sortBy !== 'date' || sortOrder === 'asc') {
+        emails = this.sortEmails(emails, sortBy, sortOrder);
+      }
+
+      // For token-based pagination, provide accurate metadata
+      const hasMore = !!data.nextPageToken;
+      const isFirstPage = !nextPage;
+      const returnedCount = emails.length;
+      
+      return {
+        emails,
+        metadata: {
+          // Accurate fields
+          total: data.resultSizeEstimate || returnedCount, // Gmail's estimate
+          limit,
+          hasMore,
+          returnedCount, // Actual number of emails returned
+          nextPage: data.nextPageToken || null,
+          
+          // Traditional fields (approximate for token-based pagination)
+          offset: isFirstPage ? 0 : null, // Can only know for first page
+          currentPage: isFirstPage ? 1 : null, // Can only know for first page  
+          totalPages: null, // Cannot determine with token pagination
+          nextOffset: null // Not used in token pagination
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
   sortEmails(emails, sortBy, sortOrder) {
     return emails.sort((a, b) => {
       let aVal, bVal;

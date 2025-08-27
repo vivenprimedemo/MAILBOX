@@ -30,6 +30,7 @@ router.get('/accounts/:accountId/emails/:folder/email/:messageId', EmailControll
 
 // Fetch emails with pagination and advanced filtering
 router.get('/accounts/:accountId/emails', validateQuery(schemas.listEmails), EmailController.listEmails);
+router.get('/accounts/:accountId/emails-v2', validateQuery(schemas.listEmails), EmailController.listEmailsV2);
 router.get('/accounts/:accountId/search', validateQuery(schemas.search), EmailController.searchEmails);
 
 // Thread operations
