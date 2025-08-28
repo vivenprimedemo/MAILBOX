@@ -63,10 +63,10 @@ export class EmailController {
       });
     } catch (error) {
       logger.error('Failed to get emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, folder: req.params.folder });
-
+      
       const errorCode = error.code || 'FETCH_EMAILS_ERROR';
       const statusCode = errorCode === 'PROVIDER_INITIALIZATION_FAILED' ? 422 : 500;
-
+      
       res.status(statusCode).json({
         success: false,
         data: null,
@@ -87,8 +87,8 @@ export class EmailController {
       const { folder } = req.query;
 
       const result = await EmailController.emailService.getEmail(
-        accountId,
-        messageId,
+        accountId, 
+        messageId, 
         folder,
         req.userId
       );
@@ -261,7 +261,7 @@ export class EmailController {
   static async listEmails(req, res) {
     try {
       const { accountId } = req.params;
-      const {
+      const { 
         folderId = 'INBOX',
         limit = 50,
         offset = 0,
@@ -316,94 +316,11 @@ export class EmailController {
         }
       });
     } catch (error) {
-      logger.error('Failed to list emails', {
-        error: error.message,
-        stack: error.stack,
+      logger.error('Failed to list emails', { 
+        error: error.message, 
+        stack: error.stack, 
         accountId: req.params.accountId,
-        query: req.query
-      });
-      res.status(500).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'LIST_EMAILS_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to list emails',
-          provider: '',
-          timestamp: new Date()
-        },
-        metadata: {}
-      });
-    }
-  }
-
-  static async listEmailsV2(req, res) {
-    try {
-      const { accountId } = req.params;
-      const {
-        folderId = 'INBOX',
-        limit = 50,
-        offset = 0,
-        sortBy = 'date',
-        sortOrder = 'desc',
-        search = '',
-        isUnread,
-        isFlagged,
-        hasAttachment,
-        from,
-        to,
-        subject,
-        dateFrom,
-        dateTo,
-        useCache = true,
-        nextPage
-      } = req.query;
-
-      // Parse boolean query parameters
-      const filters = {};
-      if (isUnread !== undefined) filters.isUnread = isUnread === 'true';
-      if (isFlagged !== undefined) filters.isFlagged = isFlagged === 'true';
-      if (hasAttachment !== undefined) filters.hasAttachment = hasAttachment === 'true';
-      if (from) filters.from = from;
-      if (to) filters.to = to;
-      if (subject) filters.subject = subject;
-      if (dateFrom) filters.dateFrom = dateFrom;
-      if (dateTo) filters.dateTo = dateTo;
-
-      const options = {
-        folderId,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        sortBy,
-        sortOrder,
-        search,
-        filters,
-        useCache: useCache !== 'false',
-        nextPage
-      };
-
-      const result = await EmailController.emailService.listEmailsV2(
-        accountId,
-        req.userId,
-        options
-      );
-
-      res.json({
-        success: true,
-        data: result.data ? {
-          emails: result.data,
-          metadata: result.metadata
-        } : result,
-        error: null,
-        metadata: result.metadata || {
-          timestamp: new Date()
-        }
-      });
-    } catch (error) {
-      logger.error('Failed to list emails', {
-        error: error.message,
-        stack: error.stack,
-        accountId: req.params.accountId,
-        query: req.query
+        query: req.query 
       });
       res.status(500).json({
         success: false,
@@ -643,8 +560,8 @@ export class EmailController {
       const replyOptions = req.body;
 
       const result = await EmailController.emailService.replyToEmail(
-        accountId,
-        messageId,
+        accountId, 
+        messageId, 
         replyOptions,
         req.userId
       );
@@ -679,9 +596,9 @@ export class EmailController {
       const { to, message } = req.body;
 
       const result = await EmailController.emailService.forwardEmail(
-        accountId,
-        messageId,
-        to,
+        accountId, 
+        messageId, 
+        to, 
         message,
         req.userId
       );
@@ -778,14 +695,14 @@ export class EmailController {
 
       // Try to connect to the email provider
       const connected = await EmailController.emailService.connectProvider(
-        newAccount.id,
+        newAccount.id, 
         accountData.config
       );
 
       if (!connected) {
         // Remove the account if connection failed
         await AuthService.removeEmailAccount(req.userId, newAccount.id);
-
+        
         res.status(400).json({
           success: false,
           data: null,
@@ -831,8 +748,8 @@ export class EmailController {
       const updateData = req.body;
 
       const updatedAccount = await AuthService.updateEmailAccount(
-        req.userId,
-        accountId,
+        req.userId, 
+        accountId, 
         updateData
       );
 
@@ -940,21 +857,21 @@ export class EmailController {
       res.setHeader('Content-Type', result.contentType || 'application/octet-stream');
       res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
       res.setHeader('Content-Length', result.size || result.data.length);
-
+      
       // Send the binary data
       res.send(result.data);
     } catch (error) {
-      logger.error('Failed to get attachment', {
-        error: error.message,
-        stack: error.stack,
-        accountId: req.params.accountId,
+      logger.error('Failed to get attachment', { 
+        error: error.message, 
+        stack: error.stack, 
+        accountId: req.params.accountId, 
         messageId: req.params.messageId,
-        attachmentId: req.params.attachmentId
+        attachmentId: req.params.attachmentId 
       });
-
+      
       const errorCode = error.code || 'FETCH_ATTACHMENT_ERROR';
       const statusCode = errorCode === 'PROVIDER_INITIALIZATION_FAILED' ? 422 : 500;
-
+      
       res.status(statusCode).json({
         success: false,
         data: null,

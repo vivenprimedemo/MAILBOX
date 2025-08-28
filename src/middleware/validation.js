@@ -156,8 +156,7 @@ export const schemas = {
     subject: Joi.string().optional(),
     dateFrom: Joi.date().iso().optional(),
     dateTo: Joi.date().iso().optional(),
-    useCache: Joi.boolean().default(true),
-    nextPage: Joi.string().optional()
+    useCache: Joi.boolean().default(true)
   }),
 
   updatePreferences: Joi.object({
