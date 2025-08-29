@@ -35,6 +35,9 @@ export const config = {
     GOOGLE_REDIRECT_URI:
         process.env.GOOGLE_REDIRECT_URI ||
         "http://localhost:6010/api/oauth/callback/google",
+    GOOGLE_CLOUD_PROJECT_ID: process.env.GOOGLE_CLOUD_PROJECT_ID,
+    GOOGLE_PUBSUB_TOPIC: process.env.GOOGLE_PUBSUB_TOPIC,
+    GOOGLE_PUBSUB_SUBSCRIPTION: process.env.GOOGLE_PUBSUB_SUBSCRIPTION,
 
     // Outlook configuration
     OUTLOOK_CLIENT_ID: process.env.OUTLOOK_CLIENT_ID,

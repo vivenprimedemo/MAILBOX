@@ -618,6 +618,78 @@ POST /emails/accounts/:accountId/sync
 }
 ```
 
+### Watch Email Account (Real-time Notifications)
+```
+POST /emails/accounts/:accountId/watch
+```
+
+**Parameters:**
+- `accountId` (path) - Email account ID
+
+**Description:**
+Sets up real-time email notifications using provider-specific push mechanisms:
+- **Gmail**: Uses Google Cloud Pub/Sub to receive push notifications for INBOX and SENT folders
+- **Outlook**: Uses Microsoft Graph webhooks for real-time updates
+- **IMAP**: Not supported (polling-based sync only)
+
+**Request Body:**
+```json
+{
+  "labelIds": ["INBOX", "SENT"], // Optional: Gmail label filters
+  "webhookUrl": "https://your-domain.com/webhooks/email" // Optional: Custom webhook endpoint
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Email watch setup successfully",
+  "data": {
+    "historyId": "12345678", // Gmail: History ID for incremental sync
+    "expiration": "2024-01-22T12:00:00.000Z", // Watch expiration time
+    "subscriptionId": "sub_abc123", // Outlook: Subscription ID
+    "updated": {
+      "acknowledged": true,
+      "matchedCount": 1,
+      "modifiedCount": 1
+    }
+  }
+}
+```
+
+**Provider-Specific Notes:**
+
+**Gmail Requirements:**
+- Google Cloud Project with Pub/Sub API enabled
+- Pub/Sub topic configured: `projects/{PROJECT_ID}/topics/{TOPIC_NAME}`
+- Environment variables: `GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_PUBSUB_TOPIC`
+- OAuth scopes: `https://mail.google.com/` or `https://www.googleapis.com/auth/gmail.modify`
+
+**Outlook Requirements:**
+- Microsoft Graph subscription endpoint
+- Valid notification URL accessible from Microsoft servers
+- Environment variables: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`
+
+**Error Responses:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "WATCH_SETUP_FAILED",
+    "message": "Failed to setup email watch: Gmail API error: 400 Bad Request",
+    "provider": "gmail",
+    "timestamp": "2024-01-15T14:30:00.000Z"
+  }
+}
+```
+
+**Common Error Causes:**
+- Invalid Pub/Sub topic configuration
+- Missing required OAuth scopes
+- Incorrect webhook URL (Outlook)
+- Provider service unavailable
+
 ---
 
 ## ❌ Error Responses

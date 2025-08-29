@@ -1,7 +1,8 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { google } from 'googleapis';
 import { consoleHelper } from '../../consoleHelper.js';
-import { provider_config_map } from '../config/index.js';
+import { config, provider_config_map } from '../config/index.js';
+import { EmailConfig } from '../models/Email.js';
 
 export class GmailProvider extends BaseEmailProvider {
     constructor(config) {
@@ -852,6 +853,46 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     async watchEmailAccount(accountId) {
-        // Implement the logic to watch the email account
+        try {
+            if (!this.accessToken) {
+                throw new Error('Not authenticated');
+            }
+    
+            const data = await this.makeGmailRequest(
+                'https://gmail.googleapis.com/gmail/v1/users/me/watch',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        labelIds: ['INBOX', 'SENT'],
+                        labelFilterBehavior: 'include',
+                        topicName: `projects/${config.GOOGLE_CLOUD_PROJECT_ID}/topics/${config.GOOGLE_PUBSUB_TOPIC}`,
+                    })
+                }
+            );
+    
+            consoleHelper("WATCH EMAIL ACCOUNT GMAIL PROVIDER RES", data);
+    
+            const { historyId, expiration } = data;
+    
+            // Prepare metadata update
+            const metadataUpdate = {
+                'metadata.watch': {
+                    history_id: historyId,
+                    expiration: new Date(Number(expiration)), // Gmail returns timestamp in ms
+                    active: true,
+                    last_updated: new Date(),
+                }
+            };
+    
+            // Update the EmailConfig document
+            const updatedEmailConfig = await EmailConfig.updateOne(
+                { _id: accountId },
+                { $set: metadataUpdate }
+            );
+    
+            return { success: true, data, updated: updatedEmailConfig };
+        } catch (error) {
+            throw new Error(`Failed to watch Gmail account: ${error.message}`);
+        }
     }
 }
