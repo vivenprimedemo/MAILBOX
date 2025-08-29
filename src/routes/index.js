@@ -3,6 +3,7 @@ import authRoutes from './auth.js';
 import emailRoutes from './emails.js';
 import { Database } from '../config/database.js';
 import { config } from '../config/index.js';
+import webhookRoutes from './webhooks.js';
 
 const router = Router();
 
@@ -90,6 +91,8 @@ router.get('/', (req, res) => {
 // Mount route modules
 router.use('/auth', authRoutes);
 router.use('/emails', emailRoutes);
+
+router.use('/webhook' , webhookRoutes)
 
 // 404 handler for API routes
 router.use('*', (req, res) => {

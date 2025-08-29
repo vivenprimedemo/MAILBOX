@@ -1,7 +1,6 @@
 import { config } from './config/index.js';
 import express from 'express';
 import cors from 'cors';
-// import dotenv from 'dotenv';
 import { Database } from './config/database.js';
 import { logger, httpLogger } from './config/logger.js';
 import apiRoutes from './routes/index.js';
@@ -14,9 +13,6 @@ import {
     securityErrorHandler,
     securityLogger
 } from './middleware/security.js';
-
-// Load environment variables
-// dotenv.config();
 
 class EmailClientServer {
     app;
