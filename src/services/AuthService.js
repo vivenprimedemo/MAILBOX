@@ -5,281 +5,281 @@ import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 
 export class AuthService {
-  static JWT_SECRET = config.JWT_SECRET;
-  static JWT_EXPIRES_IN = config.JWT_EXPIRES_IN;
+    static JWT_SECRET = config.JWT_SECRET;
+    static JWT_EXPIRES_IN = config.JWT_EXPIRES_IN;
 
-  static async register(userData) {
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ username: userData.username }, { email: userData.email }]
-    });
+    static async register(userData) {
+        // Check if user already exists
+        const existingUser = await User.findOne({
+            $or: [{ username: userData.username }, { email: userData.email }]
+        });
 
-    if (existingUser) {
-      throw new Error('Username or email already exists');
+        if (existingUser) {
+            throw new Error('Username or email already exists');
+        }
+
+        // Hash password
+        const saltRounds = 12;
+        const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+
+        // Create user
+        const userId = this.generateUserId();
+        const user = new User({
+            id: userId,
+            username: userData.username,
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            passwordHash,
+            emailAccounts: [],
+            preferences: {
+                threadsEnabled: true,
+                autoMarkAsRead: false,
+                syncInterval: 300000, // 5 minutes
+                displayDensity: 'comfortable',
+                theme: 'light'
+            },
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+
+        await user.save();
+
+        // Generate token
+        const token = this.generateToken(userId);
+
+        return { user: user.toObject(), token };
     }
 
-    // Hash password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+    static async login(username, password) {
+        // Find user
+        const user = await User.findOne({
+            $or: [{ username }, { email: username }],
+            isActive: true
+        });
 
-    // Create user
-    const userId = this.generateUserId();
-    const user = new User({
-      id: userId,
-      username: userData.username,
-      email: userData.email,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      passwordHash,
-      emailAccounts: [],
-      preferences: {
-        threadsEnabled: true,
-        autoMarkAsRead: false,
-        syncInterval: 300000, // 5 minutes
-        displayDensity: 'comfortable',
-        theme: 'light'
-      },
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+        if (!user) {
+            throw new Error('Invalid credentials');
+        }
 
-    await user.save();
+        // Verify password
+        const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+        if (!isValidPassword) {
+            throw new Error('Invalid credentials');
+        }
 
-    // Generate token
-    const token = this.generateToken(userId);
+        // Update last login
+        user.lastLoginAt = new Date();
+        await user.save();
 
-    return { user: user.toObject(), token };
-  }
+        // Generate token
+        const token = this.generateToken(user.id);
 
-  static async login(username, password) {
-    // Find user
-    const user = await User.findOne({
-      $or: [{ username }, { email: username }],
-      isActive: true
-    });
-
-    if (!user) {
-      throw new Error('Invalid credentials');
+        return { user: user.toObject(), token };
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!isValidPassword) {
-      throw new Error('Invalid credentials');
+    static async refreshToken(oldToken) {
+        try {
+            const decoded = jwt.verify(oldToken, this.JWT_SECRET);
+
+            const user = await User.findOne({ id: decoded.userId, isActive: true });
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            const token = this.generateToken(user.id);
+            return { token };
+        } catch (error) {
+            throw new Error('Invalid or expired token');
+        }
     }
 
-    // Update last login
-    user.lastLoginAt = new Date();
-    await user.save();
-
-    // Generate token
-    const token = this.generateToken(user.id);
-
-    return { user: user.toObject(), token };
-  }
-
-  static async refreshToken(oldToken) {
-    try {
-      const decoded = jwt.verify(oldToken, this.JWT_SECRET);
-      
-      const user = await User.findOne({ id: decoded.userId, isActive: true });
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      const token = this.generateToken(user.id);
-      return { token };
-    } catch (error) {
-      throw new Error('Invalid or expired token');
-    }
-  }
-
-  static async getUserById(userId) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    return user ? user.toObject() : null;
-  }
-
-  static async updateUser(userId, updateData) {
-    const allowedUpdates = ['firstName', 'lastName', 'preferences'];
-    const updates = {};
-
-    Object.keys(updateData).forEach(key => {
-      if (allowedUpdates.includes(key)) {
-        updates[key] = updateData[key];
-      }
-    });
-
-    updates.updatedAt = new Date();
-
-    const user = await User.findOneAndUpdate(
-      { id: userId, isActive: true },
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
-
-    return user ? user.toObject() : null;
-  }
-
-  static async updatePassword(userId, currentPassword, newPassword) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      throw new Error('User not found');
+    static async getUserById(userId) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        return user ? user.toObject() : null;
     }
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isValidPassword) {
-      throw new Error('Invalid current password');
+    static async updateUser(userId, updateData) {
+        const allowedUpdates = ['firstName', 'lastName', 'preferences'];
+        const updates = {};
+
+        Object.keys(updateData).forEach(key => {
+            if (allowedUpdates.includes(key)) {
+                updates[key] = updateData[key];
+            }
+        });
+
+        updates.updatedAt = new Date();
+
+        const user = await User.findOneAndUpdate(
+            { id: userId, isActive: true },
+            { $set: updates },
+            { new: true, runValidators: true }
+        );
+
+        return user ? user.toObject() : null;
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+    static async updatePassword(userId, currentPassword, newPassword) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-    // Update password
-    user.passwordHash = passwordHash;
-    user.updatedAt = new Date();
-    await user.save();
-  }
+        // Verify current password
+        const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!isValidPassword) {
+            throw new Error('Invalid current password');
+        }
 
-  static async deactivateUser(userId) {
-    await User.findOneAndUpdate(
-      { id: userId },
-      { 
-        $set: { 
-          isActive: false, 
-          updatedAt: new Date() 
-        } 
-      }
-    );
-  }
+        // Hash new password
+        const saltRounds = 12;
+        const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
-  // Email Account Management
-  static async addEmailAccount(userId, accountData) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      throw new Error('User not found');
+        // Update password
+        user.passwordHash = passwordHash;
+        user.updatedAt = new Date();
+        await user.save();
     }
 
-    // Check if email account already exists
-    const existingAccount = user.emailAccounts.find(
-      (account) => account.email === accountData.email
-    );
-
-    if (existingAccount) {
-      throw new Error('Email account already exists');
+    static async deactivateUser(userId) {
+        await User.findOneAndUpdate(
+            { id: userId },
+            {
+                $set: {
+                    isActive: false,
+                    updatedAt: new Date()
+                }
+            }
+        );
     }
 
-    const newAccount = user.addEmailAccount(accountData);
-    await user.save();
+    // Email Account Management
+    static async addEmailAccount(userId, accountData) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-    return newAccount;
-  }
+        // Check if email account already exists
+        const existingAccount = user.emailAccounts.find(
+            (account) => account.email === accountData.email
+        );
 
-  static async updateEmailAccount(userId, accountId, updateData) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      throw new Error('User not found');
+        if (existingAccount) {
+            throw new Error('Email account already exists');
+        }
+
+        const newAccount = user.addEmailAccount(accountData);
+        await user.save();
+
+        return newAccount;
     }
 
-    const accountIndex = user.emailAccounts.findIndex(
-      (account) => account.id === accountId
-    );
+    static async updateEmailAccount(userId, accountId, updateData) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-    if (accountIndex === -1) {
-      throw new Error('Email account not found');
+        const accountIndex = user.emailAccounts.findIndex(
+            (account) => account.id === accountId
+        );
+
+        if (accountIndex === -1) {
+            throw new Error('Email account not found');
+        }
+
+        const allowedUpdates = ['displayName', 'isActive', 'config'];
+        Object.keys(updateData).forEach(key => {
+            if (allowedUpdates.includes(key) && updateData[key] !== undefined) {
+                user.emailAccounts[accountIndex][key] = updateData[key];
+            }
+        });
+
+        user.emailAccounts[accountIndex].updatedAt = new Date();
+        user.updatedAt = new Date();
+
+        await user.save();
+
+        return user.emailAccounts[accountIndex];
     }
 
-    const allowedUpdates = ['displayName', 'isActive', 'config'];
-    Object.keys(updateData).forEach(key => {
-      if (allowedUpdates.includes(key) && updateData[key] !== undefined) {
-        user.emailAccounts[accountIndex][key] = updateData[key];
-      }
-    });
+    static async removeEmailAccount(userId, accountId) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-    user.emailAccounts[accountIndex].updatedAt = new Date();
-    user.updatedAt = new Date();
-    
-    await user.save();
-
-    return user.emailAccounts[accountIndex];
-  }
-
-  static async removeEmailAccount(userId, accountId) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      throw new Error('User not found');
+        user.removeEmailAccount(accountId);
+        user.updatedAt = new Date();
+        await user.save();
     }
 
-    user.removeEmailAccount(accountId);
-    user.updatedAt = new Date();
-    await user.save();
-  }
+    static async getEmailAccounts(userId) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-  static async getEmailAccounts(userId) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      throw new Error('User not found');
+        const accounts = user.emailAccounts.filter((account) => account.isActive);
+        return accounts;
     }
 
-    const accounts = user.emailAccounts.filter((account) => account.isActive);
-    return accounts;
-  }
+    static async getEmailAccount(userId, accountId) {
+        const user = await User.findOne({ id: userId, isActive: true });
+        if (!user) {
+            return null;
+        }
 
-  static async getEmailAccount(userId, accountId) {
-    const user = await User.findOne({ id: userId, isActive: true });
-    if (!user) {
-      return null;
+        return user.getEmailAccount(accountId) || null;
     }
 
-    return user.getEmailAccount(accountId) || null;
-  }
-
-  static generateToken(userId) {
-    return jwt.sign(
-      { userId, type: 'access' },
-      this.JWT_SECRET,
-      { expiresIn: this.JWT_EXPIRES_IN }
-    );
-  }
-
-  static generateUserId() {
-    return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  // Utility methods for token validation
-  static verifyToken(token) {
-    try {
-      const decoded = jwt.verify(token, this.JWT_SECRET);
-      return { userId: decoded.userId, type: decoded.type };
-    } catch (error) {
-      return null;
-    }
-  }
-
-  static async validateUserSession(token) {
-    const decoded = this.verifyToken(token);
-    if (!decoded) {
-      return null;
+    static generateToken(userId) {
+        return jwt.sign(
+            { userId, type: 'access' },
+            this.JWT_SECRET,
+            { expiresIn: this.JWT_EXPIRES_IN }
+        );
     }
 
-    return this.getUserById(decoded.userId);
-  }
-
-  static async updateEmailAccessToken(accountId, accessToken) {
-    const user = await EmailConfig.findById(accountId);
-    if (!user) {
-      throw new Error(`Email account not found ${accountId}`);
+    static generateUserId() {
+        return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
-    user.oauth_config.access_token = accessToken;
+    // Utility methods for token validation
+    static verifyToken(token) {
+        try {
+            const decoded = jwt.verify(token, this.JWT_SECRET);
+            return { userId: decoded.userId, type: decoded.type };
+        } catch (error) {
+            return null;
+        }
+    }
 
-    user.markModified("oauth_config");
+    static async validateUserSession(token) {
+        const decoded = this.verifyToken(token);
+        if (!decoded) {
+            return null;
+        }
 
-    user.updatedAt = new Date();
-    const savedUser = await user.save();
-    return savedUser;
-  }
+        return this.getUserById(decoded.userId);
+    }
+
+    static async updateEmailAccessToken(accountId, accessToken) {
+        const user = await EmailConfig.findById(accountId);
+        if (!user) {
+            throw new Error(`Email account not found ${accountId}`);
+        }
+
+        user.oauth_config.access_token = accessToken;
+
+        user.markModified("oauth_config");
+
+        user.updatedAt = new Date();
+        const savedUser = await user.save();
+        return savedUser;
+    }
 }
 

@@ -6,748 +6,748 @@ import { BaseEmailProvider } from './BaseEmailProvider.js';
 // For JavaScript, we'll use JSDoc comments instead
 
 export class IMAPProvider extends BaseEmailProvider {
-  imapClient;
-  smtpTransporter;
-  folders = [];
+    imapClient;
+    smtpTransporter;
+    folders = [];
 
-  constructor(config) {
-    super(config);
-  }
-
-  getCapabilities() {
-    return {
-      supportsThreading: true,
-      supportsLabels: false,
-      supportsFolders: true,
-      supportsSearch: true,
-      supportsRealTimeSync: true,
-      supportsSending: true,
-      supportsAttachments: true,
-      maxAttachmentSize: 25 * 1024 * 1024 // 25MB
-    };
-  }
-
-  async connect() {
-    return new Promise((resolve, reject) => {
-      this.imapClient = new Imap({
-        host: this.config.host,
-        port: this.config.port || 993,
-        tls: this.config.secure !== false,
-        user: this.config.auth.user,
-        password: this.config.auth.pass,
-        tlsOptions: this.config.tls || { rejectUnauthorized: false }
-      });
-
-      this.imapClient.once('ready', () => {
-        this.isConnected = true;
-        this.setupSMTP();
-        resolve();
-      });
-
-      this.imapClient.once('error', (err) => {
-        this.isConnected = false;
-        reject(err);
-      });
-
-      this.imapClient.once('end', () => {
-        this.isConnected = false;
-      });
-
-      this.imapClient.connect();
-    });
-  }
-
-  setupSMTP() {
-    this.smtpTransporter = nodemailer.createTransport({
-      host: this.config.host.replace('imap', 'smtp'),
-      port: 587,
-      secure: false,
-      auth: {
-        user: this.config.auth.user,
-        pass: this.config.auth.pass
-      }
-    });
-  }
-
-  async disconnect() {
-    if (this.imapClient) {
-      this.imapClient.end();
-      this.isConnected = false;
+    constructor(config) {
+        super(config);
     }
-  }
 
-  async authenticate(credentials) {
-    try {
-      await this.connect();
-      return true;
-    } catch (error) {
-      return false;
+    getCapabilities() {
+        return {
+            supportsThreading: true,
+            supportsLabels: false,
+            supportsFolders: true,
+            supportsSearch: true,
+            supportsRealTimeSync: true,
+            supportsSending: true,
+            supportsAttachments: true,
+            maxAttachmentSize: 25 * 1024 * 1024 // 25MB
+        };
     }
-  }
 
-  async getFolders() {
-    return new Promise((resolve, reject) => {
-      if (!this.imapClient) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      this.imapClient.getBoxes((err, boxes) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        this.folders = this.parseBoxes(boxes);
-        resolve(this.folders);
-      });
-    });
-  }
-
-  parseBoxes(boxes, parent) {
-    const folders = [];
-
-    Object.keys(boxes).forEach(name => {
-      const box = boxes[name];
-      const fullName = parent ? `${parent}${box.delimiter}${name}` : name;
-      
-      const folder = {
-        name: fullName,
-        displayName: name,
-        type: this.getFolderType(name.toLowerCase()),
-        unreadCount: 0,
-        totalCount: 0,
-        parent
-      };
-
-      if (box.children) {
-        folder.children = this.parseBoxes(box.children, fullName);
-      }
-
-      folders.push(folder);
-    });
-
-    return folders;
-  }
-
-  getFolderType(name) {
-    if (name.includes('inbox')) return 'inbox';
-    if (name.includes('sent')) return 'sent';
-    if (name.includes('draft')) return 'drafts';
-    if (name.includes('trash') || name.includes('deleted')) return 'trash';
-    if (name.includes('spam') || name.includes('junk')) return 'spam';
-    return 'custom';
-  }
-
-  async getEmails(request) {
-    const { folderId: folder = 'INBOX', limit = 50, offset = 0 } = request;
-    return new Promise((resolve, reject) => {
-      if (!this.imapClient) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      this.imapClient.openBox(folder, true, (err, box) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        const total = box.messages.total;
-        const start = Math.max(1, total - offset - limit + 1);
-        const end = total - offset;
-
-        if (start > end) {
-          resolve([]);
-          return;
-        }
-
-        const fetch = this.imapClient.seq.fetch(`${start}:${end}`, {
-          bodies: '',
-          struct: true
-        });
-
-        const emails = [];
-
-        fetch.on('message', (msg, seqno) => {
-          let uid;
-          let flags = [];
-
-          msg.once('attributes', (attrs) => {
-            uid = attrs.uid;
-            flags = attrs.flags || [];
-          });
-
-          msg.once('body', (stream) => {
-            let buffer = '';
-            stream.on('data', (chunk) => {
-              buffer += chunk.toString('utf8');
+    async connect() {
+        return new Promise((resolve, reject) => {
+            this.imapClient = new Imap({
+                host: this.config.host,
+                port: this.config.port || 993,
+                tls: this.config.secure !== false,
+                user: this.config.auth.user,
+                password: this.config.auth.pass,
+                tlsOptions: this.config.tls || { rejectUnauthorized: false }
             });
 
-            stream.once('end', async () => {
-              try {
-                const parsed = await simpleParser(buffer);
-                const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folder);
-                emails.push(email);
-              } catch (error) {
-                console.error('Error parsing email:', error);
-              }
+            this.imapClient.once('ready', () => {
+                this.isConnected = true;
+                this.setupSMTP();
+                resolve();
             });
-          });
+
+            this.imapClient.once('error', (err) => {
+                this.isConnected = false;
+                reject(err);
+            });
+
+            this.imapClient.once('end', () => {
+                this.isConnected = false;
+            });
+
+            this.imapClient.connect();
         });
+    }
 
-        fetch.once('error', reject);
-        fetch.once('end', () => {
-          emails.sort((a, b) => b.date.getTime() - a.date.getTime());
-          resolve(emails);
+    setupSMTP() {
+        this.smtpTransporter = nodemailer.createTransport({
+            host: this.config.host.replace('imap', 'smtp'),
+            port: 587,
+            secure: false,
+            auth: {
+                user: this.config.auth.user,
+                pass: this.config.auth.pass
+            }
         });
-      });
-    });
-  }
+    }
 
-  async listEmails(request) {
-    try {
-      const {
-        folderId = 'INBOX',
-        limit = 50,
-        offset = 0,
-        sortBy = 'date',
-        sortOrder = 'desc',
-        search = '',
-        isUnread,
-        isFlagged,
-        hasAttachment,
-        from,
-        to,
-        subject,
-        dateFrom,
-        dateTo
-      } = request;
-
-      return new Promise((resolve, reject) => {
-        if (!this.imapClient) {
-          reject(new Error('Not connected'));
-          return;
+    async disconnect() {
+        if (this.imapClient) {
+            this.imapClient.end();
+            this.isConnected = false;
         }
+    }
 
-        this.imapClient.openBox(folderId, true, (err, box) => {
-          if (err) {
-            reject(err);
-            return;
-          }
+    async authenticate(credentials) {
+        try {
+            await this.connect();
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
 
-          const total = box.messages.total;
-
-          // Build search criteria for IMAP
-          let searchCriteria = ['ALL'];
-
-          if (search) {
-            searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
-          }
-          if (from) searchCriteria.push(['FROM', from]);
-          if (to) searchCriteria.push(['TO', to]);
-          if (subject) searchCriteria.push(['SUBJECT', subject]);
-          if (isUnread === true) searchCriteria.push(['UNSEEN']);
-          if (isUnread === false) searchCriteria.push(['SEEN']);
-          if (isFlagged === true) searchCriteria.push(['FLAGGED']);
-          if (isFlagged === false) searchCriteria.push(['UNFLAGGED']);
-          if (dateFrom) searchCriteria.push(['SINCE', dateFrom]);
-          if (dateTo) searchCriteria.push(['BEFORE', dateTo]);
-
-          this.imapClient.search(searchCriteria, (err, uids) => {
-            if (err) {
-              reject(err);
-              return;
+    async getFolders() {
+        return new Promise((resolve, reject) => {
+            if (!this.imapClient) {
+                reject(new Error('Not connected'));
+                return;
             }
 
-            if (!uids.length) {
-              resolve({
-                emails: [],
-                metadata: {
-                  total: 0,
-                  limit,
-                  offset,
-                  hasMore: false,
-                  currentPage: Math.floor(offset / limit) + 1,
-                  totalPages: 0,
-                  nextOffset: null
+            this.imapClient.getBoxes((err, boxes) => {
+                if (err) {
+                    reject(err);
+                    return;
                 }
-              });
-              return;
+
+                this.folders = this.parseBoxes(boxes);
+                resolve(this.folders);
+            });
+        });
+    }
+
+    parseBoxes(boxes, parent) {
+        const folders = [];
+
+        Object.keys(boxes).forEach(name => {
+            const box = boxes[name];
+            const fullName = parent ? `${parent}${box.delimiter}${name}` : name;
+
+            const folder = {
+                name: fullName,
+                displayName: name,
+                type: this.getFolderType(name.toLowerCase()),
+                unreadCount: 0,
+                totalCount: 0,
+                parent
+            };
+
+            if (box.children) {
+                folder.children = this.parseBoxes(box.children, fullName);
             }
 
-            // Apply pagination to UIDs
-            const paginatedUids = uids.slice(offset, offset + limit);
-
-            const fetch = this.imapClient.fetch(paginatedUids, {
-              bodies: '',
-              struct: true
-            });
-
-            const emails = [];
-
-            fetch.on('message', (msg, seqno) => {
-              let uid;
-              let flags = [];
-
-              msg.once('attributes', (attrs) => {
-                uid = attrs.uid;
-                flags = attrs.flags || [];
-              });
-
-              msg.once('body', (stream) => {
-                let buffer = '';
-                stream.on('data', (chunk) => {
-                  buffer += chunk.toString('utf8');
-                });
-
-                stream.once('end', async () => {
-                  try {
-                    const parsed = await simpleParser(buffer);
-                    const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
-                    emails.push(email);
-                  } catch (error) {
-                    console.error('Error parsing email:', error);
-                  }
-                });
-              });
-            });
-
-            fetch.once('error', reject);
-            fetch.once('end', () => {
-              // Apply sorting
-              const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
-
-              const hasMore = offset + limit < uids.length;
-
-              resolve({
-                emails: sortedEmails,
-                metadata: {
-                  total: uids.length,
-                  limit,
-                  offset,
-                  hasMore,
-                  currentPage: Math.floor(offset / limit) + 1,
-                  totalPages: Math.ceil(uids.length / limit),
-                  nextOffset: hasMore ? offset + limit : null
-                }
-              });
-            });
-          });
+            folders.push(folder);
         });
-      });
-    } catch (error) {
-      throw error;
+
+        return folders;
     }
 
-  }
-  async listEmailsV2(request) {
-    try {
-      const {
-        folderId = 'INBOX',
-        limit = 50,
-        offset = 0,
-        sortBy = 'date',
-        sortOrder = 'desc',
-        search = '',
-        isUnread,
-        isFlagged,
-        hasAttachment,
-        from,
-        to,
-        subject,
-        dateFrom,
-        dateTo
-      } = request;
+    getFolderType(name) {
+        if (name.includes('inbox')) return 'inbox';
+        if (name.includes('sent')) return 'sent';
+        if (name.includes('draft')) return 'drafts';
+        if (name.includes('trash') || name.includes('deleted')) return 'trash';
+        if (name.includes('spam') || name.includes('junk')) return 'spam';
+        return 'custom';
+    }
 
-      return new Promise((resolve, reject) => {
-        if (!this.imapClient) {
-          reject(new Error('Not connected'));
-          return;
-        }
-
-        this.imapClient.openBox(folderId, true, (err, box) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-
-          const total = box.messages.total;
-
-          // Build search criteria for IMAP
-          let searchCriteria = ['ALL'];
-
-          if (search) {
-            searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
-          }
-          if (from) searchCriteria.push(['FROM', from]);
-          if (to) searchCriteria.push(['TO', to]);
-          if (subject) searchCriteria.push(['SUBJECT', subject]);
-          if (isUnread === true) searchCriteria.push(['UNSEEN']);
-          if (isUnread === false) searchCriteria.push(['SEEN']);
-          if (isFlagged === true) searchCriteria.push(['FLAGGED']);
-          if (isFlagged === false) searchCriteria.push(['UNFLAGGED']);
-          if (dateFrom) searchCriteria.push(['SINCE', dateFrom]);
-          if (dateTo) searchCriteria.push(['BEFORE', dateTo]);
-
-          this.imapClient.search(searchCriteria, (err, uids) => {
-            if (err) {
-              reject(err);
-              return;
+    async getEmails(request) {
+        const { folderId: folder = 'INBOX', limit = 50, offset = 0 } = request;
+        return new Promise((resolve, reject) => {
+            if (!this.imapClient) {
+                reject(new Error('Not connected'));
+                return;
             }
 
-            if (!uids.length) {
-              resolve({
-                emails: [],
-                metadata: {
-                  total: 0,
-                  limit,
-                  offset,
-                  hasMore: false,
-                  currentPage: Math.floor(offset / limit) + 1,
-                  totalPages: 0,
-                  nextOffset: null
+            this.imapClient.openBox(folder, true, (err, box) => {
+                if (err) {
+                    reject(err);
+                    return;
                 }
-              });
-              return;
+
+                const total = box.messages.total;
+                const start = Math.max(1, total - offset - limit + 1);
+                const end = total - offset;
+
+                if (start > end) {
+                    resolve([]);
+                    return;
+                }
+
+                const fetch = this.imapClient.seq.fetch(`${start}:${end}`, {
+                    bodies: '',
+                    struct: true
+                });
+
+                const emails = [];
+
+                fetch.on('message', (msg, seqno) => {
+                    let uid;
+                    let flags = [];
+
+                    msg.once('attributes', (attrs) => {
+                        uid = attrs.uid;
+                        flags = attrs.flags || [];
+                    });
+
+                    msg.once('body', (stream) => {
+                        let buffer = '';
+                        stream.on('data', (chunk) => {
+                            buffer += chunk.toString('utf8');
+                        });
+
+                        stream.once('end', async () => {
+                            try {
+                                const parsed = await simpleParser(buffer);
+                                const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folder);
+                                emails.push(email);
+                            } catch (error) {
+                                console.error('Error parsing email:', error);
+                            }
+                        });
+                    });
+                });
+
+                fetch.once('error', reject);
+                fetch.once('end', () => {
+                    emails.sort((a, b) => b.date.getTime() - a.date.getTime());
+                    resolve(emails);
+                });
+            });
+        });
+    }
+
+    async listEmails(request) {
+        try {
+            const {
+                folderId = 'INBOX',
+                limit = 50,
+                offset = 0,
+                sortBy = 'date',
+                sortOrder = 'desc',
+                search = '',
+                isUnread,
+                isFlagged,
+                hasAttachment,
+                from,
+                to,
+                subject,
+                dateFrom,
+                dateTo
+            } = request;
+
+            return new Promise((resolve, reject) => {
+                if (!this.imapClient) {
+                    reject(new Error('Not connected'));
+                    return;
+                }
+
+                this.imapClient.openBox(folderId, true, (err, box) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    const total = box.messages.total;
+
+                    // Build search criteria for IMAP
+                    let searchCriteria = ['ALL'];
+
+                    if (search) {
+                        searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
+                    }
+                    if (from) searchCriteria.push(['FROM', from]);
+                    if (to) searchCriteria.push(['TO', to]);
+                    if (subject) searchCriteria.push(['SUBJECT', subject]);
+                    if (isUnread === true) searchCriteria.push(['UNSEEN']);
+                    if (isUnread === false) searchCriteria.push(['SEEN']);
+                    if (isFlagged === true) searchCriteria.push(['FLAGGED']);
+                    if (isFlagged === false) searchCriteria.push(['UNFLAGGED']);
+                    if (dateFrom) searchCriteria.push(['SINCE', dateFrom]);
+                    if (dateTo) searchCriteria.push(['BEFORE', dateTo]);
+
+                    this.imapClient.search(searchCriteria, (err, uids) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+
+                        if (!uids.length) {
+                            resolve({
+                                emails: [],
+                                metadata: {
+                                    total: 0,
+                                    limit,
+                                    offset,
+                                    hasMore: false,
+                                    currentPage: Math.floor(offset / limit) + 1,
+                                    totalPages: 0,
+                                    nextOffset: null
+                                }
+                            });
+                            return;
+                        }
+
+                        // Apply pagination to UIDs
+                        const paginatedUids = uids.slice(offset, offset + limit);
+
+                        const fetch = this.imapClient.fetch(paginatedUids, {
+                            bodies: '',
+                            struct: true
+                        });
+
+                        const emails = [];
+
+                        fetch.on('message', (msg, seqno) => {
+                            let uid;
+                            let flags = [];
+
+                            msg.once('attributes', (attrs) => {
+                                uid = attrs.uid;
+                                flags = attrs.flags || [];
+                            });
+
+                            msg.once('body', (stream) => {
+                                let buffer = '';
+                                stream.on('data', (chunk) => {
+                                    buffer += chunk.toString('utf8');
+                                });
+
+                                stream.once('end', async () => {
+                                    try {
+                                        const parsed = await simpleParser(buffer);
+                                        const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
+                                        emails.push(email);
+                                    } catch (error) {
+                                        console.error('Error parsing email:', error);
+                                    }
+                                });
+                            });
+                        });
+
+                        fetch.once('error', reject);
+                        fetch.once('end', () => {
+                            // Apply sorting
+                            const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
+
+                            const hasMore = offset + limit < uids.length;
+
+                            resolve({
+                                emails: sortedEmails,
+                                metadata: {
+                                    total: uids.length,
+                                    limit,
+                                    offset,
+                                    hasMore,
+                                    currentPage: Math.floor(offset / limit) + 1,
+                                    totalPages: Math.ceil(uids.length / limit),
+                                    nextOffset: hasMore ? offset + limit : null
+                                }
+                            });
+                        });
+                    });
+                });
+            });
+        } catch (error) {
+            throw error;
+        }
+
+    }
+    async listEmailsV2(request) {
+        try {
+            const {
+                folderId = 'INBOX',
+                limit = 50,
+                offset = 0,
+                sortBy = 'date',
+                sortOrder = 'desc',
+                search = '',
+                isUnread,
+                isFlagged,
+                hasAttachment,
+                from,
+                to,
+                subject,
+                dateFrom,
+                dateTo
+            } = request;
+
+            return new Promise((resolve, reject) => {
+                if (!this.imapClient) {
+                    reject(new Error('Not connected'));
+                    return;
+                }
+
+                this.imapClient.openBox(folderId, true, (err, box) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    const total = box.messages.total;
+
+                    // Build search criteria for IMAP
+                    let searchCriteria = ['ALL'];
+
+                    if (search) {
+                        searchCriteria.push(['OR', ['SUBJECT', search], ['BODY', search]]);
+                    }
+                    if (from) searchCriteria.push(['FROM', from]);
+                    if (to) searchCriteria.push(['TO', to]);
+                    if (subject) searchCriteria.push(['SUBJECT', subject]);
+                    if (isUnread === true) searchCriteria.push(['UNSEEN']);
+                    if (isUnread === false) searchCriteria.push(['SEEN']);
+                    if (isFlagged === true) searchCriteria.push(['FLAGGED']);
+                    if (isFlagged === false) searchCriteria.push(['UNFLAGGED']);
+                    if (dateFrom) searchCriteria.push(['SINCE', dateFrom]);
+                    if (dateTo) searchCriteria.push(['BEFORE', dateTo]);
+
+                    this.imapClient.search(searchCriteria, (err, uids) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+
+                        if (!uids.length) {
+                            resolve({
+                                emails: [],
+                                metadata: {
+                                    total: 0,
+                                    limit,
+                                    offset,
+                                    hasMore: false,
+                                    currentPage: Math.floor(offset / limit) + 1,
+                                    totalPages: 0,
+                                    nextOffset: null
+                                }
+                            });
+                            return;
+                        }
+
+                        // Apply pagination to UIDs
+                        const paginatedUids = uids.slice(offset, offset + limit);
+
+                        const fetch = this.imapClient.fetch(paginatedUids, {
+                            bodies: '',
+                            struct: true
+                        });
+
+                        const emails = [];
+
+                        fetch.on('message', (msg, seqno) => {
+                            let uid;
+                            let flags = [];
+
+                            msg.once('attributes', (attrs) => {
+                                uid = attrs.uid;
+                                flags = attrs.flags || [];
+                            });
+
+                            msg.once('body', (stream) => {
+                                let buffer = '';
+                                stream.on('data', (chunk) => {
+                                    buffer += chunk.toString('utf8');
+                                });
+
+                                stream.once('end', async () => {
+                                    try {
+                                        const parsed = await simpleParser(buffer);
+                                        const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
+                                        emails.push(email);
+                                    } catch (error) {
+                                        console.error('Error parsing email:', error);
+                                    }
+                                });
+                            });
+                        });
+
+                        fetch.once('error', reject);
+                        fetch.once('end', () => {
+                            // Apply sorting
+                            const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
+
+                            const hasMore = offset + limit < uids.length;
+
+                            resolve({
+                                emails: sortedEmails,
+                                metadata: {
+                                    total: uids.length,
+                                    limit,
+                                    offset,
+                                    hasMore,
+                                    currentPage: Math.floor(offset / limit) + 1,
+                                    totalPages: Math.ceil(uids.length / limit),
+                                    nextOffset: hasMore ? offset + limit : null
+                                }
+                            });
+                        });
+                    });
+                });
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    sortEmails(emails, sortBy, sortOrder) {
+        return emails.sort((a, b) => {
+            let aVal, bVal;
+
+            switch (sortBy) {
+                case 'date':
+                    aVal = new Date(a.date);
+                    bVal = new Date(b.date);
+                    break;
+                case 'subject':
+                    aVal = (a.subject || '').toLowerCase();
+                    bVal = (b.subject || '').toLowerCase();
+                    break;
+                case 'from':
+                    aVal = (a.from?.name || a.from?.address || '').toLowerCase();
+                    bVal = (b.from?.name || b.from?.address || '').toLowerCase();
+                    break;
+                case 'size':
+                    aVal = a.size || 0;
+                    bVal = b.size || 0;
+                    break;
+                default:
+                    return 0;
             }
 
-            // Apply pagination to UIDs
-            const paginatedUids = uids.slice(offset, offset + limit);
+            if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
 
-            const fetch = this.imapClient.fetch(paginatedUids, {
-              bodies: '',
-              struct: true
-            });
+    parseEmailFromImap(parsed, uid, flags, folder) {
+        return {
+            id: uid,
+            messageId: parsed.messageId || this.generateMessageId(),
+            threadId: this.extractThreadId(parsed),
+            subject: parsed.subject || '(No Subject)',
+            from: this.parseAddress(parsed.from?.value?.[0]),
+            to: this.parseAddresses(parsed.to?.value || []),
+            cc: this.parseAddresses(parsed.cc?.value || []),
+            bcc: this.parseAddresses(parsed.bcc?.value || []),
+            replyTo: this.parseAddresses(parsed.replyTo?.value || []),
+            date: parsed.date || new Date(),
+            bodyText: parsed.text,
+            bodyHtml: parsed.html,
+            attachments: this.parseAttachments(parsed.attachments || []),
+            flags: {
+                seen: flags.includes('\\Seen'),
+                flagged: flags.includes('\\Flagged'),
+                draft: flags.includes('\\Draft'),
+                answered: flags.includes('\\Answered'),
+                deleted: flags.includes('\\Deleted')
+            },
+            folder,
+            provider: 'imap',
+            inReplyTo: parsed.inReplyTo,
+            references: this.parseReferences(parsed.references?.split(' '))
+        };
+    }
 
-            const emails = [];
+    extractThreadId(parsed) {
+        // Use In-Reply-To or References for threading
+        if (parsed.inReplyTo) return parsed.inReplyTo;
+        if (parsed.references) {
+            const refs = parsed.references.split(' ');
+            return refs[0] || parsed.messageId;
+        }
+        return parsed.messageId;
+    }
 
-            fetch.on('message', (msg, seqno) => {
-              let uid;
-              let flags = [];
+    parseAddress(addr) {
+        if (!addr) return { address: '' };
+        return {
+            name: addr.name,
+            address: addr.address
+        };
+    }
 
-              msg.once('attributes', (attrs) => {
-                uid = attrs.uid;
-                flags = attrs.flags || [];
-              });
+    parseAddresses(addresses) {
+        return addresses.map(addr => this.parseAddress(addr));
+    }
 
-              msg.once('body', (stream) => {
-                let buffer = '';
-                stream.on('data', (chunk) => {
-                  buffer += chunk.toString('utf8');
-                });
+    parseAttachments(attachments) {
+        return attachments.map(att => ({
+            filename: att.filename,
+            contentType: att.contentType,
+            size: att.size,
+            contentId: att.cid,
+            data: att.content
+        }));
+    }
 
-                stream.once('end', async () => {
-                  try {
-                    const parsed = await simpleParser(buffer);
-                    const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
-                    emails.push(email);
-                  } catch (error) {
-                    console.error('Error parsing email:', error);
-                  }
-                });
-              });
-            });
+    async getEmail(messageId, folder) {
+        // Implementation for getting specific email
+        const emails = await this.getEmails({ folderId: folder || 'INBOX', limit: 1000 });
+        return emails.find(email => email.messageId === messageId) || null;
+    }
 
-            fetch.once('error', reject);
-            fetch.once('end', () => {
-              // Apply sorting
-              const sortedEmails = this.sortEmails(emails, sortBy, sortOrder);
-              
-              const hasMore = offset + limit < uids.length;
-              
-              resolve({
-                emails: sortedEmails,
-                metadata: {
-                  total: uids.length,
-                  limit,
-                  offset,
-                  hasMore,
-                  currentPage: Math.floor(offset / limit) + 1,
-                  totalPages: Math.ceil(uids.length / limit),
-                  nextOffset: hasMore ? offset + limit : null
+    async getThread(threadId) {
+        const emails = await this.getEmails({ folderId: 'INBOX', limit: 1000 });
+        const threadEmails = emails.filter(email => email.threadId === threadId);
+        if (threadEmails.length === 0) return null;
+
+        const threads = this.buildThreads(threadEmails);
+        return threads[0] || null;
+    }
+
+    async getThreads(request) {
+        const emails = await this.getEmails(request);
+        return this.buildThreads(emails);
+    }
+
+    async searchEmails(query) {
+        // Basic implementation - can be enhanced
+        const emails = await this.getEmails({ folderId: query.folder || 'INBOX', limit: 1000 });
+
+        const filteredEmails = emails.filter(email => {
+            if (query.query && !email.subject.toLowerCase().includes(query.query.toLowerCase())) {
+                return false;
+            }
+            if (query.from && !email.from.address.includes(query.from)) {
+                return false;
+            }
+            if (query.isUnread !== undefined && query.isUnread !== !email.flags.seen) {
+                return false;
+            }
+            return true;
+        });
+
+        return { emails: filteredEmails };
+    }
+
+    async searchThreads(query) {
+        const emails = await this.searchEmails(query);
+        return this.buildThreads(emails);
+    }
+
+    async markAsRead(request) {
+        await this.updateFlags(request.messageIds, ['\\Seen'], 'add', request.folderId);
+        return { updated: request.messageIds.length };
+    }
+
+    async markAsUnread(request) {
+        await this.updateFlags(request.messageIds, ['\\Seen'], 'remove', request.folderId);
+        return { updated: request.messageIds.length };
+    }
+
+    async markAsFlagged(request) {
+        await this.updateFlags(request.messageIds, ['\\Flagged'], 'add', request.folderId);
+        return { updated: request.messageIds.length };
+    }
+
+    async markAsUnflagged(request) {
+        await this.updateFlags(request.messageIds, ['\\Flagged'], 'remove', request.folderId);
+        return { updated: request.messageIds.length };
+    }
+
+    async updateFlags(messageIds, flags, action, folder) {
+        return new Promise((resolve, reject) => {
+            if (!this.imapClient) {
+                reject(new Error('Not connected'));
+                return;
+            }
+
+            this.imapClient.openBox(folder || 'INBOX', false, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
                 }
-              });
+
+                const operation = action === 'add' ? 'addFlags' : 'delFlags';
+                this.imapClient[operation](messageIds, flags, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
             });
-          });
         });
-      });
-    } catch (error) {
-      throw error;
     }
-  }
 
-  sortEmails(emails, sortBy, sortOrder) {
-    return emails.sort((a, b) => {
-      let aVal, bVal;
-      
-      switch (sortBy) {
-        case 'date':
-          aVal = new Date(a.date);
-          bVal = new Date(b.date);
-          break;
-        case 'subject':
-          aVal = (a.subject || '').toLowerCase();
-          bVal = (b.subject || '').toLowerCase();
-          break;
-        case 'from':
-          aVal = (a.from?.name || a.from?.address || '').toLowerCase();
-          bVal = (b.from?.name || b.from?.address || '').toLowerCase();
-          break;
-        case 'size':
-          aVal = a.size || 0;
-          bVal = b.size || 0;
-          break;
-        default:
-          return 0;
-      }
-      
-      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-
-  parseEmailFromImap(parsed, uid, flags, folder) {
-    return {
-      id: uid,
-      messageId: parsed.messageId || this.generateMessageId(),
-      threadId: this.extractThreadId(parsed),
-      subject: parsed.subject || '(No Subject)',
-      from: this.parseAddress(parsed.from?.value?.[0]),
-      to: this.parseAddresses(parsed.to?.value || []),
-      cc: this.parseAddresses(parsed.cc?.value || []),
-      bcc: this.parseAddresses(parsed.bcc?.value || []),
-      replyTo: this.parseAddresses(parsed.replyTo?.value || []),
-      date: parsed.date || new Date(),
-      bodyText: parsed.text,
-      bodyHtml: parsed.html,
-      attachments: this.parseAttachments(parsed.attachments || []),
-      flags: {
-        seen: flags.includes('\\Seen'),
-        flagged: flags.includes('\\Flagged'),
-        draft: flags.includes('\\Draft'),
-        answered: flags.includes('\\Answered'),
-        deleted: flags.includes('\\Deleted')
-      },
-      folder,
-      provider: 'imap',
-      inReplyTo: parsed.inReplyTo,
-      references: this.parseReferences(parsed.references?.split(' '))
-    };
-  }
-
-  extractThreadId(parsed) {
-    // Use In-Reply-To or References for threading
-    if (parsed.inReplyTo) return parsed.inReplyTo;
-    if (parsed.references) {
-      const refs = parsed.references.split(' ');
-      return refs[0] || parsed.messageId;
+    async deleteEmails(request) {
+        await this.updateFlags(request.messageIds, ['\\Deleted'], 'add', request.folderId);
+        await this.expunge(request.folderId);
+        return { deleted: request.messageIds.length };
     }
-    return parsed.messageId;
-  }
 
-  parseAddress(addr) {
-    if (!addr) return { address: '' };
-    return {
-      name: addr.name,
-      address: addr.address
-    };
-  }
+    async expunge(folder) {
+        return new Promise((resolve, reject) => {
+            if (!this.imapClient) {
+                reject(new Error('Not connected'));
+                return;
+            }
 
-  parseAddresses(addresses) {
-    return addresses.map(addr => this.parseAddress(addr));
-  }
+            this.imapClient.openBox(folder || 'INBOX', false, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
 
-  parseAttachments(attachments) {
-    return attachments.map(att => ({
-      filename: att.filename,
-      contentType: att.contentType,
-      size: att.size,
-      contentId: att.cid,
-      data: att.content
-    }));
-  }
+                this.imapClient.expunge((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        });
+    }
 
-  async getEmail(messageId, folder) {
-    // Implementation for getting specific email
-    const emails = await this.getEmails({ folderId: folder || 'INBOX', limit: 1000 });
-    return emails.find(email => email.messageId === messageId) || null;
-  }
+    async moveEmails(request) {
+        return new Promise((resolve, reject) => {
+            if (!this.imapClient) {
+                reject(new Error('Not connected'));
+                return;
+            }
 
-  async getThread(threadId) {
-    const emails = await this.getEmails({ folderId: 'INBOX', limit: 1000 });
-    const threadEmails = emails.filter(email => email.threadId === threadId);
-    if (threadEmails.length === 0) return null;
-    
-    const threads = this.buildThreads(threadEmails);
-    return threads[0] || null;
-  }
+            this.imapClient.openBox(request.sourceFolder, false, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
 
-  async getThreads(request) {
-    const emails = await this.getEmails(request);
-    return this.buildThreads(emails);
-  }
+                this.imapClient.move(request.messageIds, request.destinationFolder, (err) => {
+                    if (err) reject(err);
+                    else resolve({ moved: request.messageIds.length });
+                });
+            });
+        });
+    }
 
-  async searchEmails(query) {
-    // Basic implementation - can be enhanced
-    const emails = await this.getEmails({ folderId: query.folder || 'INBOX', limit: 1000 });
-    
-    const filteredEmails = emails.filter(email => {
-      if (query.query && !email.subject.toLowerCase().includes(query.query.toLowerCase())) {
-        return false;
-      }
-      if (query.from && !email.from.address.includes(query.from)) {
-        return false;
-      }
-      if (query.isUnread !== undefined && query.isUnread !== !email.flags.seen) {
-        return false;
-      }
-      return true;
-    });
-    
-    return { emails: filteredEmails };
-  }
-
-  async searchThreads(query) {
-    const emails = await this.searchEmails(query);
-    return this.buildThreads(emails);
-  }
-
-  async markAsRead(request) {
-    await this.updateFlags(request.messageIds, ['\\Seen'], 'add', request.folderId);
-    return { updated: request.messageIds.length };
-  }
-
-  async markAsUnread(request) {
-    await this.updateFlags(request.messageIds, ['\\Seen'], 'remove', request.folderId);
-    return { updated: request.messageIds.length };
-  }
-
-  async markAsFlagged(request) {
-    await this.updateFlags(request.messageIds, ['\\Flagged'], 'add', request.folderId);
-    return { updated: request.messageIds.length };
-  }
-
-  async markAsUnflagged(request) {
-    await this.updateFlags(request.messageIds, ['\\Flagged'], 'remove', request.folderId);
-    return { updated: request.messageIds.length };
-  }
-
-  async updateFlags(messageIds, flags, action, folder) {
-    return new Promise((resolve, reject) => {
-      if (!this.imapClient) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      this.imapClient.openBox(folder || 'INBOX', false, (err) => {
-        if (err) {
-          reject(err);
-          return;
+    async sendEmail(options) {
+        if (!this.smtpTransporter) {
+            throw new Error('SMTP not configured');
         }
 
-        const operation = action === 'add' ? 'addFlags' : 'delFlags';
-        this.imapClient[operation](messageIds, flags, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    });
-  }
+        const mailOptions = {
+            from: this.config.auth.user,
+            to: options.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
+            cc: options.cc?.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
+            bcc: options.bcc?.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
+            subject: options.subject,
+            text: options.bodyText,
+            html: options.bodyHtml,
+            attachments: options.attachments,
+            inReplyTo: options.inReplyTo,
+            references: options.references?.join(' ')
+        };
 
-  async deleteEmails(request) {
-    await this.updateFlags(request.messageIds, ['\\Deleted'], 'add', request.folderId);
-    await this.expunge(request.folderId);
-    return { deleted: request.messageIds.length };
-  }
+        const info = await this.smtpTransporter.sendMail(mailOptions);
+        return { messageId: info.messageId, id: info.messageId };
+    }
 
-  async expunge(folder) {
-    return new Promise((resolve, reject) => {
-      if (!this.imapClient) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      this.imapClient.openBox(folder || 'INBOX', false, (err) => {
-        if (err) {
-          reject(err);
-          return;
+    async replyToEmail(originalMessageId, options) {
+        const originalEmail = await this.getEmail(originalMessageId);
+        if (!originalEmail) {
+            throw new Error('Original email not found');
         }
 
-        this.imapClient.expunge((err) => {
-          if (err) reject(err);
-          else resolve();
+        return this.sendEmail({
+            to: [originalEmail.from],
+            subject: `Re: ${originalEmail.subject}`,
+            inReplyTo: originalEmail.messageId,
+            references: [originalEmail.messageId, ...(originalEmail.references || [])],
+            ...options
         });
-      });
-    });
-  }
+    }
 
-  async moveEmails(request) {
-    return new Promise((resolve, reject) => {
-      if (!this.imapClient) {
-        reject(new Error('Not connected'));
-        return;
-      }
-
-      this.imapClient.openBox(request.sourceFolder, false, (err) => {
-        if (err) {
-          reject(err);
-          return;
+    async forwardEmail(originalMessageId, to, message) {
+        const originalEmail = await this.getEmail(originalMessageId);
+        if (!originalEmail) {
+            throw new Error('Original email not found');
         }
 
-        this.imapClient.move(request.messageIds, request.destinationFolder, (err) => {
-          if (err) reject(err);
-          else resolve({ moved: request.messageIds.length });
-        });
-      });
-    });
-  }
-
-  async sendEmail(options) {
-    if (!this.smtpTransporter) {
-      throw new Error('SMTP not configured');
-    }
-
-    const mailOptions = {
-      from: this.config.auth.user,
-      to: options.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
-      cc: options.cc?.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
-      bcc: options.bcc?.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', '),
-      subject: options.subject,
-      text: options.bodyText,
-      html: options.bodyHtml,
-      attachments: options.attachments,
-      inReplyTo: options.inReplyTo,
-      references: options.references?.join(' ')
-    };
-
-    const info = await this.smtpTransporter.sendMail(mailOptions);
-    return { messageId: info.messageId, id: info.messageId };
-  }
-
-  async replyToEmail(originalMessageId, options) {
-    const originalEmail = await this.getEmail(originalMessageId);
-    if (!originalEmail) {
-      throw new Error('Original email not found');
-    }
-
-    return this.sendEmail({
-      to: [originalEmail.from],
-      subject: `Re: ${originalEmail.subject}`,
-      inReplyTo: originalEmail.messageId,
-      references: [originalEmail.messageId, ...(originalEmail.references || [])],
-      ...options
-    });
-  }
-
-  async forwardEmail(originalMessageId, to, message) {
-    const originalEmail = await this.getEmail(originalMessageId);
-    if (!originalEmail) {
-      throw new Error('Original email not found');
-    }
-
-    const forwardedContent = `
+        const forwardedContent = `
 ${message || ''}
 
 ---------- Forwarded message ---------
@@ -759,33 +759,33 @@ To: ${originalEmail.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr
 ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
     `;
 
-    return this.sendEmail({
-      to,
-      subject: `Fwd: ${originalEmail.subject}`,
-      bodyText: forwardedContent,
-      attachments: originalEmail.attachments?.map(att => ({
-        filename: att.filename,
-        content: att.data,
-        contentType: att.contentType
-      }))
-    });
-  }
-
-  async sync(folder) {
-    // Implement real-time sync using IMAP IDLE
-    if (!this.imapClient) return;
-
-    this.imapClient.openBox(folder || 'INBOX', true, (err) => {
-      if (err) return;
-      
-      this.imapClient.on('mail', () => {
-        // New mail received
-        this.getEmails({ folderId: folder || 'INBOX', limit: 1 }).then(emails => {
-          if (emails.length > 0) {
-            this.emitNewEmail(emails[0]);
-          }
+        return this.sendEmail({
+            to,
+            subject: `Fwd: ${originalEmail.subject}`,
+            bodyText: forwardedContent,
+            attachments: originalEmail.attachments?.map(att => ({
+                filename: att.filename,
+                content: att.data,
+                contentType: att.contentType
+            }))
         });
-      });
-    });
-  }
+    }
+
+    async sync(folder) {
+        // Implement real-time sync using IMAP IDLE
+        if (!this.imapClient) return;
+
+        this.imapClient.openBox(folder || 'INBOX', true, (err) => {
+            if (err) return;
+
+            this.imapClient.on('mail', () => {
+                // New mail received
+                this.getEmails({ folderId: folder || 'INBOX', limit: 1 }).then(emails => {
+                    if (emails.length > 0) {
+                        this.emitNewEmail(emails[0]);
+                    }
+                });
+            });
+        });
+    }
 }
