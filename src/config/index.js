@@ -23,7 +23,7 @@ export const config = {
     RATE_LIMIT_MAX_REQUESTS: parseInt(
         process.env.RATE_LIMIT_MAX_REQUESTS || "100"
     ),
-    ALLOWED_ORIGINS: ["http://localhost:3000", "http://localhost:6010"],
+    ALLOWED_ORIGINS: ["https://crm.myunifyai.com", "http://localhost:3000", "http://localhost:6010"],
 
     // Version
     VERSION: process.env.npm_package_version || "1.0.0",
