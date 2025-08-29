@@ -267,10 +267,110 @@ export class GmailProvider extends BaseEmailProvider {
     }
   }
 
+
+  async listEmailsV2(request) {
+    try {
+      const {
+        folderId = 'INBOX',
+        limit = 20,
+        nextPage = null,
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo
+      } = request;
+
+      let folderIds = folderId;
+      if (folderId === 'Inbox') folderIds = 'INBOX';
+
+      // 1️⃣ Get total emails count using Labels API
+      const labelInfo = await this.makeGmailRequest(
+        `https://gmail.googleapis.com/gmail/v1/users/me/labels/${folderIds}`
+      );
+      const total = labelInfo.messagesTotal || 0;
+
+      // 2️⃣ Build Gmail search query
+      let query = `in:${folderId}`;
+      if (search) query += ` ${search}`;
+      if (from) query += ` from:${from}`;
+      if (to) query += ` to:${to}`;
+      if (subject) query += ` subject:"${subject}"`;
+      if (hasAttachment) query += ' has:attachment';
+      if (isUnread === true) query += ' is:unread';
+      if (isUnread === false) query += ' -is:unread';
+      if (isFlagged === true) query += ' is:starred';
+      if (isFlagged === false) query += ' -is:starred';
+      if (dateFrom) query += ` after:${dateFrom.toISOString().split('T')[0]}`;
+      if (dateTo) query += ` before:${dateTo.toISOString().split('T')[0]}`;
+
+      // 3️⃣ Build params
+      const params = new URLSearchParams({
+        maxResults: limit.toString(),
+        q: query
+      });
+      if (nextPage) params.append('pageToken', nextPage);
+
+      // 4️⃣ Call Gmail API for messages
+      const data = await this.makeGmailRequest(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`
+      );
+
+      // 5️⃣ If no messages found
+      if (!data.messages || data.messages.length === 0) {
+        return {
+          emails: [],
+          metadata: {
+            total,
+            limit,
+            hasMore: false,
+            currentPage: nextPage ? null : 1,
+            totalPages: Math.ceil(total / limit),
+            nextPageToken: null
+          }
+        };
+      }
+
+      // 6️⃣ Fetch full email details
+      const emailPromises = data.messages.map((msg) =>
+        this.getEmail(msg.id, folderIds)
+      );
+      const emails = (await Promise.all(emailPromises)).filter(Boolean);
+
+      // 7️⃣ Build metadata
+      const totalPages = Math.ceil(total / limit);
+      const currentPage = nextPage ? null : 1;
+      const hasMore = !!data.nextPageToken;
+
+      return {
+        emails,
+        metadata: {
+          total,
+          limit,
+          hasMore,
+          currentPage,
+          totalPages,
+          nextPageToken: data.nextPageToken || null
+        }
+      };
+    } catch (err) {
+      console.error('listEmailsV2 error:', err);
+      throw err;
+    }
+  }
+
+
+
+
+
   sortEmails(emails, sortBy, sortOrder) {
     return emails.sort((a, b) => {
       let aVal, bVal;
-      
+
       switch (sortBy) {
         case 'date':
           aVal = new Date(a.date);

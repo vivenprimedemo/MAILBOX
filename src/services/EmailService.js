@@ -212,10 +212,94 @@ export class EmailService {
       throw listError;
     }
   }
+  async listEmailsV2(accountId, userId, options = {}) {
+    const provider = await this.getProvider(accountId, userId);
+    if (!provider) {
+      const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+      error.code = 'PROVIDER_INITIALIZATION_FAILED';
+      throw error;
+    }
 
+    const {
+      folderId = 'INBOX',
+      limit = 50,
+      offset = 0,
+      sortBy = 'date',
+      sortOrder = 'desc',
+      search = '',
+      filters = {},
+      useCache = true,
+      nextPage = ""
+    } = options;
+
+    // Build enhanced request object
+    const request = {
+      folderId,
+      limit,
+      offset,
+      sortBy,
+      sortOrder,
+      search,
+      filters,
+      // Additional filter options
+      isUnread: filters.isUnread,
+      isFlagged: filters.isFlagged,
+      hasAttachment: filters.hasAttachment,
+      from: filters.from,
+      to: filters.to,
+      subject: filters.subject,
+      dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+      dateTo: filters.dateTo ? new Date(filters.dateTo) : undefined,
+      nextPage
+    };
+
+    try {
+      // Try cache first if enabled
+      if (useCache && !search && Object.keys(filters).length === 0) {
+        const cacheResult = await this.getEmailsFromCache(accountId, userId, request);
+        if (cacheResult) {
+          return cacheResult;
+        }
+      }
+
+      // Fetch from provider with enhanced request
+      const response = await provider.listEmailsV2(request);
+
+      if (response.data) {
+        // Cache emails for future use
+        await this.cacheEmails(response.data, userId, accountId);
+
+        // Ensure consistent response format
+        return {
+          data: response.data,
+          metadata: {
+            total: response.metadata?.total || response.data.length,
+            limit,
+            offset,
+            hasMore: response.metadata?.hasMore || (response.data.length === limit),
+            currentPage: Math.floor(offset / limit) + 1,
+            totalPages: response.metadata?.total ? Math.ceil(response.metadata.total / limit) : null,
+            nextOffset: response.metadata?.hasMore ? offset + limit : null,
+            provider: provider.config?.type || 'unknown',
+            sortBy,
+            sortOrder,
+            appliedFilters: filters
+          }
+        };
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error in listEmails:', error);
+      const listError = new Error(error.message);
+      listError.code = 'LIST_EMAILS_ERROR';
+      listError.provider = provider.config?.type || 'unknown';
+      throw listError;
+    }
+  }
   async getEmailsFromCache(accountId, userId, request) {
     const { folderId, limit, offset, sortBy, sortOrder } = request;
-    
+
     try {
       // Build sort object
       const sortObj = {};

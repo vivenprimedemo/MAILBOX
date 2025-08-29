@@ -335,7 +335,85 @@ export class EmailController {
       });
     }
   }
+  static async listEmailsV2(req, res) {
+    try {
+      const { accountId } = req.params;
+      const {
+        folderId = 'INBOX',
+        limit = 50,
+        offset = 0,
+        sortBy = 'date',
+        sortOrder = 'desc',
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        useCache = true,
+        nextPage = ""
+      } = req.query;
 
+      // Parse boolean query parameters
+      const filters = {};
+      if (isUnread !== undefined) filters.isUnread = isUnread === 'true';
+      if (isFlagged !== undefined) filters.isFlagged = isFlagged === 'true';
+      if (hasAttachment !== undefined) filters.hasAttachment = hasAttachment === 'true';
+      if (from) filters.from = from;
+      if (to) filters.to = to;
+      if (subject) filters.subject = subject;
+      if (dateFrom) filters.dateFrom = dateFrom;
+      if (dateTo) filters.dateTo = dateTo;
+
+      const options = {
+        folderId,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        sortBy,
+        sortOrder,
+        search,
+        filters,
+        useCache: useCache !== 'false',
+        nextPage
+      };
+
+      const result = await EmailController.emailService.listEmailsV2(
+        accountId,
+        req.userId,
+        options
+      );
+
+      res.json({
+        success: true,
+        data: result.data || result,
+        error: null,
+        metadata: result.metadata || {
+          timestamp: new Date()
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to list emails', {
+        error: error.message,
+        stack: error.stack,
+        accountId: req.params.accountId,
+        query: req.query
+      });
+      res.status(500).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'LIST_EMAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to list emails',
+          provider: '',
+          timestamp: new Date()
+        },
+        metadata: {}
+      });
+    }
+  }
   static async markAsRead(req, res) {
     try {
       const { accountId } = req.params;

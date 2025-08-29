@@ -307,6 +307,99 @@ export class OutlookProvider extends BaseEmailProvider {
     }
   }
 
+
+  async listEmailsV2(request) {
+    try {
+      const {
+        folderId = 'Inbox',
+        limit = 20,
+        search = '',
+        isUnread,
+        isFlagged,
+        hasAttachment,
+        from,
+        to,
+        subject,
+        dateFrom,
+        dateTo,
+        nextPage = null
+      } = request;
+
+      if (!this.graphClient) throw new Error('Not connected to Outlook');
+
+      let query;
+      let total = 0;
+
+      // 1️⃣ Get total count from folder metadata
+      try {
+        const folderInfo = await this.graphClient.api(`/me/mailFolders/${folderId}`).get();
+        total = folderInfo.totalItemCount || 0;
+      } catch {
+        total = 0; // fallback
+      }
+
+      if (nextPage) {
+        // 2️⃣ Use nextLink for pagination (do NOT append top/skip)
+        const decodedNextPage = decodeURIComponent(nextPage);
+        const relativePath = decodedNextPage.replace('https://graph.microsoft.com/v1.0', '');
+        query = this.graphClient.api(relativePath);
+      } else {
+        // 3️⃣ First page: build endpoint
+        const endpoint = folderId.toLowerCase() === 'inbox'
+          ? '/me/mailFolders/Inbox/messages'
+          : `/me/mailFolders/${folderId}/messages`;
+
+        query = this.graphClient.api(endpoint).expand('attachments');
+
+        // 4️⃣ Apply filters
+        const filters = [];
+        if (from) filters.push(`from/emailAddress/address eq '${from}'`);
+        if (to) filters.push(`toRecipients/any(r:r/emailAddress/address eq '${to}')`);
+        if (subject) filters.push(`contains(subject,'${subject}')`);
+        if (isUnread === true) filters.push(`isRead eq false`);
+        if (isUnread === false) filters.push(`isRead eq true`);
+        if (isFlagged === true) filters.push(`flag/flagStatus eq 'flagged'`);
+        if (isFlagged === false) filters.push(`flag/flagStatus ne 'flagged'`);
+        if (hasAttachment === true) filters.push(`hasAttachments eq true`);
+        if (hasAttachment === false) filters.push(`hasAttachments eq false`);
+        if (dateFrom) filters.push(`receivedDateTime ge ${dateFrom.toISOString()}`);
+        if (dateTo) filters.push(`receivedDateTime le ${dateTo.toISOString()}`);
+
+        if (filters.length > 0) query = query.filter(filters.join(' and '));
+
+        if (search) query = query.search(`"${search}"`);
+
+        // 5️⃣ Only use top for first page
+        query = query.top(limit);
+      }
+
+      // 6️⃣ Fetch messages
+      const messages = await query.get();
+      const emails = messages.value.map(msg => this.parseOutlookMessage(msg, folderId));
+
+      const hasMore = !!messages['@odata.nextLink'];
+
+      return {
+        emails,
+        metadata: {
+          total,
+          limit,
+          offset: nextPage ? null : 0,
+          hasMore,
+          currentPage: nextPage ? null : 1,
+          totalPages: Math.ceil(total / limit),
+          nextOffset: hasMore ? (nextPage ? null : limit) : null,
+          nextPage: hasMore ? encodeURIComponent(messages['@odata.nextLink']) : null
+        }
+      };
+    } catch (err) {
+      console.error('listEmailsV2 error:', err);
+      throw err;
+    }
+  }
+
+
+
   buildSearchQuery(search) {
     // Microsoft Graph Search API doesn't support field directives like "subject:value"
     // We need to extract just the search term from subject:WATCHER format
