@@ -963,4 +963,34 @@ export class EmailController {
             });
         }
     }
+
+    static async watchEmailAccount(req, res) {
+        try {
+            const { accountId } = req.params;
+
+            const result = await EmailController.emailService.watchEmailAccount(accountId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to watch email account', { error: error.message, stack: error.stack, accountId: req.params.accountId });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'WATCH_ACCOUNT_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to watch email account',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
 }

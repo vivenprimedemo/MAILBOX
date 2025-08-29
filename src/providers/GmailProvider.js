@@ -850,4 +850,8 @@ export class GmailProvider extends BaseEmailProvider {
             throw new Error(`Failed to fetch Gmail attachment: ${error.message}`);
         }
     }
+
+    async watchEmailAccount(accountId) {
+        // Implement the logic to watch the email account
+    }
 }

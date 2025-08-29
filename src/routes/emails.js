@@ -56,4 +56,7 @@ router.post('/accounts/:accountId/sync', EmailController.syncAccount);
 // Attachment operations
 router.get('/accounts/:accountId/message/:messageId/attachment/:attachmentId', EmailController.getAttachment);
 
+// Watcher operations
+router.post('/accounts/:accountId/watch', EmailController.watchEmailAccount);
+
 export default router;

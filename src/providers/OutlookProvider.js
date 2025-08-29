@@ -854,4 +854,8 @@ export class OutlookProvider extends BaseEmailProvider {
             throw new Error(`Failed to fetch Outlook attachment: ${error.message}`);
         }
     }
+
+    async watchEmailAccount(accountId) {
+        // Implement the logic to watch the email account
+    }
 }
