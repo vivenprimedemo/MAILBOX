@@ -81,6 +81,7 @@ class EmailClientServer {
 
         // API routes
         this.app.use('/api', apiRoutes);
+        // this.app.set('trust proxy', 1);
 
         // Static files (if needed for documentation)
         this.app.use('/public', express.static('public'));

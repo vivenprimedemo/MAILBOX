@@ -14,6 +14,7 @@ export const config = {
     // JWT configuration
     JWT_SECRET: process.env.JWT_SECRET,
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
+    WEBHOOK_BASE_URL: process.env.WEBHOOK_BASE_URL,
 
     // Logging configuration
     LOG_LEVEL: process.env.LOG_LEVEL || "info",

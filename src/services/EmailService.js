@@ -721,4 +721,40 @@ export class EmailService {
         }
         return provider.watchEmailAccount(accountId);
     }
+
+    async deleteSubscription(accountId, subscriptionId, userId = null) {
+        const provider = await this.getProvider(accountId, userId);
+        if (!provider) {
+            const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+            error.code = 'PROVIDER_INITIALIZATION_FAILED';
+            throw error;
+        }
+
+        // Check if provider supports subscription management
+        if (typeof provider.deleteSubscription !== 'function') {
+            const error = new Error('Subscription management is not supported by this provider');
+            error.code = 'SUBSCRIPTION_NOT_SUPPORTED';
+            throw error;
+        }
+
+        return provider.deleteSubscription(subscriptionId);
+    }
+
+    async listSubscriptions(accountId, userId = null) {
+        const provider = await this.getProvider(accountId, userId);
+        if (!provider) {
+            const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+            error.code = 'PROVIDER_INITIALIZATION_FAILED';
+            throw error;
+        }
+
+        // Check if provider supports subscription management
+        if (typeof provider.listSubscriptions !== 'function') {
+            const error = new Error('Subscription listing is not supported by this provider');
+            error.code = 'SUBSCRIPTION_NOT_SUPPORTED';
+            throw error;
+        }
+
+        return provider.listSubscriptions();
+    }
 }

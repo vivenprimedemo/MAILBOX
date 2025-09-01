@@ -993,4 +993,73 @@ export class EmailController {
             });
         }
     }
+
+    static async deleteSubscription(req, res) {
+        try {
+            const { accountId, subscriptionId } = req.params;
+
+            const result = await EmailController.emailService.deleteSubscription(accountId, subscriptionId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to delete subscription', { 
+                error: error.message, 
+                stack: error.stack, 
+                accountId: req.params.accountId,
+                subscriptionId: req.params.subscriptionId 
+            });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'DELETE_SUBSCRIPTION_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to delete subscription',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
+
+    static async listSubscriptions(req, res) {
+        try {
+            const { accountId } = req.params;
+
+            const result = await EmailController.emailService.listSubscriptions(accountId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to list subscriptions', { 
+                error: error.message, 
+                stack: error.stack, 
+                accountId: req.params.accountId 
+            });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'LIST_SUBSCRIPTIONS_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to list subscriptions',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
 }

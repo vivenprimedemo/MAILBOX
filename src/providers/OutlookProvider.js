@@ -3,6 +3,8 @@ import { Client } from '@microsoft/microsoft-graph-client';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import 'isomorphic-fetch';
 import { consoleHelper } from '../../consoleHelper.js';
+import { EmailConfig } from '../models/Email.js';
+import { config } from '../config/index.js';
 
 export class OutlookProvider extends BaseEmailProvider {
     constructor(config) {
@@ -856,6 +858,127 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     async watchEmailAccount(accountId) {
-        // Implement the logic to watch the email account
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        // Get notification URL from environment or use default
+        const baseUrl = config.WEBHOOK_BASE_URL || 'https://6258c1ba9a1d.ngrok-free.app';
+        const notificationUrl = `${baseUrl}/api/webhook/outlook`;
+
+        // Expiration time (Microsoft Graph max ~70 hours = 4230 minutes)
+        const expiration = new Date(Date.now() + 4230 * 60 * 1000).toISOString();
+
+        // Resources to watch
+        const resources = [
+            { folder: "Inbox", type: "incoming" },
+            { folder: "SentItems", type: "outgoing" }
+        ];
+
+        try {
+            const results = {};
+
+            for (const { folder, type } of resources) {
+                const subscriptionPayload = {
+                    changeType: "created",
+                    notificationUrl,
+                    resource: `/me/mailFolders/${folder}/messages`,
+                    expirationDateTime: expiration,
+                    clientState: `outlook_${this.config.id}_${type}_${Date.now()}`
+                };
+
+                const result = await this.graphClient.api("/subscriptions").post(subscriptionPayload);
+                results[type] = result;
+
+                const user = await EmailConfig.findOne({ _id: accountId });
+                if (!user) throw new Error(`User with ID ${accountId} not found.`);
+
+
+                user.metadata = user.metadata || {};
+                const existingSubscriptions = user.metadata.subscriptions || [];
+
+                // Remove all old subs of this type
+                for (const sub of existingSubscriptions.filter(s => s.type === type)) {
+                    await this.deleteSubscription(sub.subscriptionId);
+                }
+
+                // Keep only subs that are not this type
+                user.metadata.subscriptions = existingSubscriptions.filter(s => s.type !== type);
+
+                if (!Array.isArray(existingSubscriptions)) {
+                    user.metadata.subscriptions = [];
+                }
+
+                user.metadata.subscriptions.push({
+                    subscriptionId: result.id,
+                    expirationDateTime: result.expirationDateTime,
+                    type: type,
+                    isActive: true
+                });
+
+                user.markModified('metadata');
+                await user.save();
+
+
+                console.log(`Subscription saved for user ${user._id}:`, result.id);
+
+
+
+                console.log(`✅ Created ${type} subscription:`, {
+                    subscriptionId: result.id,
+                    resource: result.resource,
+                    expirationDateTime: result.expirationDateTime
+                });
+            }
+
+            return {
+                success: true,
+                message: "Created subscriptions for Inbox and Sent Items",
+                subscriptions: results,
+                notificationUrl
+            };
+
+        } catch (error) {
+            console.error("Outlook subscription error:", error.response?.data || error.message);
+            throw new Error(`Failed to create Outlook subscription: ${error.message}`);
+        }
+    }
+
+
+    async deleteSubscription(subscriptionId) {
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        try {
+            await this.graphClient.api(`/subscriptions/${subscriptionId}`).delete();
+            consoleHelper(`✅ Deleted subscription: ${subscriptionId}`);
+
+            return {
+                success: true,
+                message: `Subscription ${subscriptionId} deleted successfully`,
+                subscriptionId
+            };
+        } catch (error) {
+            console.error(`Error deleting subscription ${subscriptionId}:`, error.response?.data || error.message);
+            throw new Error(`Failed to delete subscription: ${error.message}`);
+        }
+    }
+
+    async listSubscriptions() {
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        try {
+            const subscriptions = await this.graphClient.api('/subscriptions').get();
+            return {
+                success: true,
+                subscriptions: subscriptions.value || []
+            };
+        } catch (error) {
+            console.error('Error listing subscriptions:', error.response?.data || error.message);
+            throw new Error(`Failed to list subscriptions: ${error.message}`);
+        }
     }
 }
