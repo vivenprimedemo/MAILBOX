@@ -579,9 +579,9 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     parseOutlookAttachments(attachments) {
-        if (!attachments || !attachments.value) return [];
+        if (!attachments) return [];
 
-        return attachments.value.map(attachment => ({
+        return attachments.map(attachment => ({
             filename: attachment.name,
             contentType: attachment.contentType,
             size: attachment.size || 0,
