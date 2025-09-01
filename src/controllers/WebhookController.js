@@ -3,12 +3,107 @@ import { consoleHelper } from "../../consoleHelper.js";
 import { EmailController } from './EmailController.js';
 import { EmailConfig } from "../models/Email.js";
 import { provider_config_map } from "../config/index.js";
+import { logger } from "../config/logger.js";
 
 
 // In-memory cache for deduplication
 const processedNotifications = new Map();
 
 export class WebhookController {
+
+    static async processEmailMessage(emailMessage, emailConfig , provider) {
+
+        console.log('processEmailMessage provider' , provider)
+        try {
+            if (!emailMessage) {
+                logger.warn('Email message is null or undefined');
+                return;
+            }
+
+            // Determine if email is sent or received
+            const isSentEmail = WebhookController.isEmailSent(emailMessage, emailConfig);
+            const direction = isSentEmail ? 'SENT' : 'RECEIVED';
+            
+            // Log email processing information
+            logger.info('Processing email message');
+            console.log({
+                ...emailMessage,
+                direction,
+                emailConfig
+            })
+
+            // TODO: Add your email processing logic here
+            // Examples:
+            // - Save to database
+            // - Send notifications
+            // - Trigger automations
+            // - Extract and process attachments
+            // - Categorize emails
+            // - Update CRM systems
+            
+        } catch (error) {
+            logger.error('Error processing email message', {
+                error: error.message,
+                stack: error.stack,
+                messageId: emailMessage?.id || emailMessage?.messageId,
+                accountId: emailConfig?._id
+            });
+        }
+    }
+
+    static isEmailSent(emailMessage, emailConfig) {
+        try {
+            // Method 1: Check labels (Gmail)
+            if (emailMessage.labels) {
+                const hasSentLabel = emailMessage.labels.some(label => 
+                    typeof label === 'string' ? 
+                        label.toUpperCase().includes('SENT') : 
+                        label.id?.toUpperCase().includes('SENT') || label.name?.toUpperCase().includes('SENT')
+                );
+                if (hasSentLabel) return true;
+            }
+
+            // Method 2: Check labelIds (Gmail)
+            if (emailMessage.labelIds) {
+                const hasSentLabelId = emailMessage.labelIds.some(labelId => 
+                    labelId === 'SENT' || labelId.toUpperCase().includes('SENT')
+                );
+                if (hasSentLabelId) return true;
+            }
+
+            // Method 3: Compare sender email with account email
+            if (emailConfig?.email && emailMessage.from) {
+                const fromAddress = emailMessage.from.address || emailMessage.from;
+                const accountEmail = emailConfig.email;
+                
+                // Normalize email addresses for comparison
+                const normalizedFrom = fromAddress?.toLowerCase().trim();
+                const normalizedAccount = accountEmail?.toLowerCase().trim();
+                
+                if (normalizedFrom === normalizedAccount) {
+                    return true;
+                }
+            }
+
+            // Method 4: Check folder/folderId (if available)
+            if (emailMessage.folderId) {
+                const sentFolders = ['SENT', 'SENTITEMS', 'SENT ITEMS', 'OUTBOX'];
+                const folderUpper = emailMessage.folderId.toUpperCase();
+                if (sentFolders.includes(folderUpper)) {
+                    return true;
+                }
+            }
+
+            // Default to received if no sent indicators found
+            return false;
+        } catch (error) {
+            logger.error('Error determining email direction', {
+                error: error.message,
+                messageId: emailMessage?.id || emailMessage?.messageId
+            });
+            return false; // Default to received on error
+        }
+    }
 
     static async getGmailClient(emailConfig) {
             if (emailConfig.provider !== "gmail") {
@@ -151,18 +246,18 @@ export class WebhookController {
                // Process each new message
                for (const messageInfo of filteredMessages) {
                    try {
-                       const message = await gmail.users.messages.get({
-                           userId: 'me',
-                           id: messageInfo.id,
-                           format: 'full'
-                       });
+                    const emailService = EmailController.emailService;
+                    const fullEmail = await emailService.getEmail(
+                        emailConfig?._id,
+                        messageInfo.id,
+                        null, // folder not needed for direct message ID lookup
+                        null  // userId not needed for this operation
+                    );
    
-                       const labelType = messageInfo.labels.includes('INBOX') ? 'INBOX' : 'SENT';
-                       const snippet = message.data.snippet?.substring(0, 100) || 'No snippet';
-                       
-                       consoleHelper(`WEBHOOK: New ${labelType} message - ${snippet}`);
-   
-                       // TODO: Process and store the email in database
+                       // Process the email message
+                       if (fullEmail) {
+                           await WebhookController.processEmailMessage(fullEmail, emailConfig , 'gmail');
+                       }
    
                    } catch (msgError) {
                        consoleHelper(`WEBHOOK: Error processing message ${messageInfo.id}:`, msgError.message);
@@ -308,6 +403,9 @@ export class WebhookController {
                         );
 
                         if (fullEmail) {
+
+                            await WebhookController.processEmailMessage(fullEmail, {accountId} , 'outlook');
+
                             // Determine if this looks like a special email type
                             const isUndeliverable = fullEmail.subject?.toLowerCase().includes('undeliverable');
                             const isAutoReply = fullEmail.from?.address?.includes('noreply') || fullEmail.from?.address?.includes('MicrosoftExchange');
