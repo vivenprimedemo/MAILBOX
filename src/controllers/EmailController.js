@@ -996,9 +996,9 @@ export class EmailController {
 
     static async deleteSubscription(req, res) {
         try {
-            const { accountId, subscriptionId } = req.params;
+            const { accountId } = req.params;
 
-            const result = await EmailController.emailService.deleteSubscription(accountId, subscriptionId);
+            const result = await EmailController.emailService.deleteSubscription(accountId);
 
             res.json({
                 success: true,
@@ -1012,8 +1012,7 @@ export class EmailController {
             logger.error('Failed to delete subscription', { 
                 error: error.message, 
                 stack: error.stack, 
-                accountId: req.params.accountId,
-                subscriptionId: req.params.subscriptionId 
+                accountId: req.params.accountId
             });
             res.status(500).json({
                 success: false,

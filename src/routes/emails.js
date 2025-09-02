@@ -60,7 +60,7 @@ router.get('/accounts/:accountId/message/:messageId/attachment/:attachmentId', E
 router.post('/accounts/:accountId/watch', EmailController.watchEmailAccount);
 
 // Subscription management operations
-router.delete('/accounts/:accountId/subscriptions/:subscriptionId', EmailController.deleteSubscription);
+router.delete('/accounts/:accountId/subscriptions', EmailController.deleteSubscription);
 router.get('/accounts/:accountId/subscriptions', EmailController.listSubscriptions);
 
 export default router;

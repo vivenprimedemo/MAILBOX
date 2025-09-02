@@ -878,6 +878,27 @@ export class OutlookProvider extends BaseEmailProvider {
         try {
             const results = {};
 
+            // First, get user and clear ALL existing subscriptions ONCE before creating new ones
+            let user = await EmailConfig.findOne({ _id: accountId });
+            if (!user) throw new Error(`User with ID ${accountId} not found.`);
+
+            user.metadata = user.metadata || {};
+            const existingSubscriptions = user.metadata.subscriptions || [];
+
+            // Remove ALL existing subscriptions for this account (only once, outside the loop)
+            if (existingSubscriptions.length > 0) {
+                await this.deleteSubscription(accountId);
+                // Reload user data after deletions
+                user = await EmailConfig.findOne({ _id: accountId });
+                user.metadata = user.metadata || {};
+            }
+
+            // Ensure subscriptions array is ready
+            if (!Array.isArray(user.metadata.subscriptions)) {
+                user.metadata.subscriptions = [];
+            }
+
+            // Now create new subscriptions
             for (const { folder, type } of resources) {
                 const subscriptionPayload = {
                     changeType: "created",
@@ -890,39 +911,13 @@ export class OutlookProvider extends BaseEmailProvider {
                 const result = await this.graphClient.api("/subscriptions").post(subscriptionPayload);
                 results[type] = result;
 
-                let user = await EmailConfig.findOne({ _id: accountId });
-                if (!user) throw new Error(`User with ID ${accountId} not found.`);
-
-                user.metadata = user.metadata || {};
-                const existingSubscriptions = user.metadata.subscriptions || [];
-
-                // Remove all old subs of this type
-                for (const sub of existingSubscriptions.filter(s => s.type === type)) {
-                    await this.deleteSubscription(sub.subscriptionId, accountId);
-                }
-
-                // Reload user data after deletions since deleteSubscription modifies the database
-                user = await EmailConfig.findOne({ _id: accountId });
-                user.metadata = user.metadata || {};
-                
-                if (!Array.isArray(user.metadata.subscriptions)) {
-                    user.metadata.subscriptions = [];
-                }
-
+                // Add the new subscription to the database
                 user.metadata.subscriptions.push({
                     subscriptionId: result.id,
                     expirationDateTime: result.expirationDateTime,
                     type: type,
                     isActive: true
                 });
-
-                user.markModified('metadata');
-                await user.save();
-
-
-                console.log(`Subscription saved for user ${user._id}:`, result.id);
-
-
 
                 console.log(`✅ Created ${type} subscription:`, {
                     subscriptionId: result.id,
@@ -931,6 +926,11 @@ export class OutlookProvider extends BaseEmailProvider {
                 });
             }
 
+            // Save all subscriptions at once
+            user.markModified('metadata');
+            await user.save();
+            console.log(`Subscriptions saved for user ${user._id}:`, user.metadata.subscriptions.map(s => s.subscriptionId));
+
             return {
                 success: true,
                 message: "Created subscriptions for Inbox and Sent Items",
@@ -938,64 +938,104 @@ export class OutlookProvider extends BaseEmailProvider {
                 notificationUrl
             };
 
-        } catch (error) {
-            console.error("Outlook subscription error:", error.response?.data || error.message);
-            throw new Error(`Failed to create Outlook subscription: ${error.message}`);
-        }
+    } catch(error) {
+        console.error("Outlook subscription error:", error.response?.data || error.message);
+        throw new Error(`Failed to create Outlook subscription: ${error.message}`);
+    }
+}
+
+
+    async deleteSubscription(accountId) {
+    if (!this.graphClient) {
+        throw new Error('Not connected to Outlook');
     }
 
+    try {
+        const deletedSubscriptions = [];
+        const errors = [];
 
-    async deleteSubscription(subscriptionId, accountId) {
-        if (!this.graphClient) {
-            throw new Error('Not connected to Outlook');
+        // Get user from database
+        const user = await EmailConfig.findOne({ _id: accountId });
+        if (!user) {
+            throw new Error(`User with ID ${accountId} not found.`);
         }
 
+        user.metadata = user.metadata || {};
+        const existingSubscriptions = user.metadata.subscriptions || [];
+
+        // List all active subscriptions from Microsoft Graph
+        let activeSubscriptions = [];
         try {
-            //remove from the database first
-            const user = await EmailConfig.findOne({ _id: accountId });
-            if (user) {
-                user.metadata = user.metadata || {};
-                const existingSubscriptions = user.metadata.subscriptions || [];
-                //if id present remove it
-                if (existingSubscriptions.some(s => s.subscriptionId === subscriptionId)) {
-                    user.metadata.subscriptions = existingSubscriptions.filter(s => s.subscriptionId !== subscriptionId);
-                    user.markModified('metadata');
-                    await user.save();
-                    consoleHelper(`✅ Removed subscription ${subscriptionId} from database`);
-                }
-            }
-
-            // Always attempt to delete from Microsoft Graph regardless of database state
-            await this.graphClient.api(`/subscriptions/${subscriptionId}`).delete();
-            consoleHelper(`✅ Deleted subscription: ${subscriptionId}`);
-
-
-
-            return {
-                success: true,
-                message: `Subscription ${subscriptionId} deleted successfully`,
-                subscriptionId
-            };
+            const subscriptionsResponse = await this.graphClient.api('/subscriptions').get();
+            activeSubscriptions = subscriptionsResponse.value || [];
+            consoleHelper(`Found ${activeSubscriptions.length} active subscriptions in Microsoft Graph`);
         } catch (error) {
-            console.error(`Error deleting subscription ${subscriptionId}:`, error.response?.data || error.message);
-            throw new Error(`Failed to delete subscription: ${error.message}`);
+            consoleHelper('Error fetching subscriptions from Microsoft Graph:', error.message);
         }
+
+        // Combine subscriptions from database and Microsoft Graph
+        const allSubscriptionIds = new Set();
+
+        // Add from database
+        existingSubscriptions.forEach(sub => {
+            if (sub.subscriptionId) {
+                allSubscriptionIds.add(sub.subscriptionId);
+            }
+        });
+
+        // Add from Microsoft Graph (in case there are orphaned subscriptions)
+        activeSubscriptions.forEach(sub => {
+            allSubscriptionIds.add(sub.id);
+        });
+
+        consoleHelper(`Total unique subscriptions to delete: ${allSubscriptionIds.size}`);
+
+        // Delete each subscription from Microsoft Graph
+        for (const subscriptionId of allSubscriptionIds) {
+            try {
+                await this.graphClient.api(`/subscriptions/${subscriptionId}`).delete();
+                deletedSubscriptions.push(subscriptionId);
+                consoleHelper(`✅ Deleted subscription: ${subscriptionId}`);
+            } catch (error) {
+                const errorMsg = `Failed to delete subscription ${subscriptionId}: ${error.message}`;
+                errors.push(errorMsg);
+                consoleHelper(`❌ ${errorMsg}`);
+            }
+        }
+
+        // Clear all subscriptions from database
+        user.metadata.subscriptions = [];
+        user.markModified('metadata');
+        await user.save();
+        consoleHelper(`✅ Cleared all subscriptions from database`);
+
+        return {
+            success: true,
+            message: `Deleted ${deletedSubscriptions.length} subscriptions, ${errors.length} errors`,
+            deletedSubscriptions,
+            errors,
+            totalAttempted: allSubscriptionIds.size
+        };
+    } catch (error) {
+        console.error(`Error deleting subscriptions for account ${accountId}:`, error.response?.data || error.message);
+        throw new Error(`Failed to delete subscriptions: ${error.message}`);
     }
+}
 
     async listSubscriptions() {
-        if (!this.graphClient) {
-            throw new Error('Not connected to Outlook');
-        }
-
-        try {
-            const subscriptions = await this.graphClient.api('/subscriptions').get();
-            return {
-                success: true,
-                subscriptions: subscriptions.value || []
-            };
-        } catch (error) {
-            console.error('Error listing subscriptions:', error.response?.data || error.message);
-            throw new Error(`Failed to list subscriptions: ${error.message}`);
-        }
+    if (!this.graphClient) {
+        throw new Error('Not connected to Outlook');
     }
+
+    try {
+        const subscriptions = await this.graphClient.api('/subscriptions').get();
+        return {
+            success: true,
+            subscriptions: subscriptions.value || []
+        };
+    } catch (error) {
+        console.error('Error listing subscriptions:', error.response?.data || error.message);
+        throw new Error(`Failed to list subscriptions: ${error.message}`);
+    }
+}
 }

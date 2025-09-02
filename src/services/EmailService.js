@@ -722,7 +722,7 @@ export class EmailService {
         return provider.watchEmailAccount(accountId);
     }
 
-    async deleteSubscription(accountId, subscriptionId, userId = null) {
+    async deleteSubscription(accountId, userId = null) {
         const provider = await this.getProvider(accountId, userId);
         if (!provider) {
             const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
@@ -737,7 +737,7 @@ export class EmailService {
             throw error;
         }
 
-        return provider.deleteSubscription(subscriptionId, accountId);
+        return provider.deleteSubscription(accountId);
     }
 
     async listSubscriptions(accountId, userId = null) {
