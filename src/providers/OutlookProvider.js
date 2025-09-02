@@ -890,22 +890,22 @@ export class OutlookProvider extends BaseEmailProvider {
                 const result = await this.graphClient.api("/subscriptions").post(subscriptionPayload);
                 results[type] = result;
 
-                const user = await EmailConfig.findOne({ _id: accountId });
+                let user = await EmailConfig.findOne({ _id: accountId });
                 if (!user) throw new Error(`User with ID ${accountId} not found.`);
-
 
                 user.metadata = user.metadata || {};
                 const existingSubscriptions = user.metadata.subscriptions || [];
 
                 // Remove all old subs of this type
                 for (const sub of existingSubscriptions.filter(s => s.type === type)) {
-                    await this.deleteSubscription(sub.subscriptionId);
+                    await this.deleteSubscription(sub.subscriptionId, accountId);
                 }
 
-                // Keep only subs that are not this type
-                user.metadata.subscriptions = existingSubscriptions.filter(s => s.type !== type);
-
-                if (!Array.isArray(existingSubscriptions)) {
+                // Reload user data after deletions since deleteSubscription modifies the database
+                user = await EmailConfig.findOne({ _id: accountId });
+                user.metadata = user.metadata || {};
+                
+                if (!Array.isArray(user.metadata.subscriptions)) {
                     user.metadata.subscriptions = [];
                 }
 
@@ -945,14 +945,31 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
 
-    async deleteSubscription(subscriptionId) {
+    async deleteSubscription(subscriptionId, accountId) {
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }
 
         try {
+            //remove from the database first
+            const user = await EmailConfig.findOne({ _id: accountId });
+            if (user) {
+                user.metadata = user.metadata || {};
+                const existingSubscriptions = user.metadata.subscriptions || [];
+                //if id present remove it
+                if (existingSubscriptions.some(s => s.subscriptionId === subscriptionId)) {
+                    user.metadata.subscriptions = existingSubscriptions.filter(s => s.subscriptionId !== subscriptionId);
+                    user.markModified('metadata');
+                    await user.save();
+                    consoleHelper(`✅ Removed subscription ${subscriptionId} from database`);
+                }
+            }
+
+            // Always attempt to delete from Microsoft Graph regardless of database state
             await this.graphClient.api(`/subscriptions/${subscriptionId}`).delete();
             consoleHelper(`✅ Deleted subscription: ${subscriptionId}`);
+
+
 
             return {
                 success: true,

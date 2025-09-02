@@ -737,7 +737,7 @@ export class EmailService {
             throw error;
         }
 
-        return provider.deleteSubscription(subscriptionId);
+        return provider.deleteSubscription(subscriptionId, accountId);
     }
 
     async listSubscriptions(accountId, userId = null) {
