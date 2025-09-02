@@ -11,19 +11,25 @@ const processedNotifications = new Map();
 
 export class WebhookController {
 
-    static async processEmailMessage(emailMessage, emailConfig , provider) {
+    static async processEmailMessage(emailMessage, emailConfig, provider) {
 
-        console.log('processEmailMessage provider' , provider)
+        console.log('processEmailMessage provider', provider)
         try {
             if (!emailMessage) {
                 logger.warn('Email message is null or undefined');
                 return;
             }
 
+            let direction;
             // Determine if email is sent or received
-            const isSentEmail = WebhookController.isEmailSent(emailMessage, emailConfig);
-            const direction = isSentEmail ? 'SENT' : 'RECEIVED';
-            
+            if (provider === 'outlook') {
+                const type = emailConfig?.clientState?.split('_')[2];
+                direction = type === 'outgoing' ? 'SENT' : 'RECEIVED';
+            } else {
+                const isSentEmail = WebhookController.isEmailSent(emailMessage, emailConfig);
+                direction = isSentEmail ? 'SENT' : 'RECEIVED';
+            }
+
             // Log email processing information
             logger.info('Processing email message');
             console.log({
@@ -404,7 +410,7 @@ export class WebhookController {
 
                         if (fullEmail) {
 
-                            await WebhookController.processEmailMessage(fullEmail, {accountId} , 'outlook');
+                            await WebhookController.processEmailMessage(fullEmail, { clientState }, 'outlook');
 
                             // Determine if this looks like a special email type
                             const isUndeliverable = fullEmail.subject?.toLowerCase().includes('undeliverable');
