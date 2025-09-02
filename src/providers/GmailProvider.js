@@ -108,7 +108,18 @@ export class GmailProvider extends BaseEmailProvider {
             throw new Error(`Gmail API error: ${response.status} ${response.statusText}`);
         }
 
-        return response.json();
+        // Handle empty responses (like the /stop endpoint which returns 204 No Content)
+        const contentLength = response.headers.get('content-length');
+        if (contentLength === '0' || response.status === 204) {
+            return {};
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        }
+
+        return {};
     }
 
     async getFolders(request = {}) {
@@ -893,6 +904,82 @@ export class GmailProvider extends BaseEmailProvider {
             return { success: true, data, updated: updatedEmailConfig };
         } catch (error) {
             throw new Error(`Failed to watch Gmail account: ${error.message}`);
+        }
+    }
+
+    async listSubscriptions(accountId) {
+        try {
+            // Gmail doesn't have a direct subscription list API
+            // Instead, we check the watch status from our EmailConfig metadata
+            consoleHelper("LIST SUBSCRIPTIONS ACCOUNT ID", accountId)
+            const emailConfig = await EmailConfig.findOne({ _id: accountId });
+            consoleHelper("LIST SUBSCRIPTIONS GMAIL PROVIDER", emailConfig);
+
+            if (!emailConfig || !emailConfig.metadata?.watch) {
+                return {
+                    success: true,
+                    subscriptions: []
+                };
+            }
+
+            const watchData = emailConfig.metadata.watch;
+            const subscription = {
+                id: `gmail_config_id_${this.accountId}`,
+                type: 'gmail_push_notification',
+                status: watchData.active ? 'active' : 'inactive',
+                historyId: watchData.history_id,
+                expiration: watchData.expiration,
+                createdAt: watchData.last_updated,
+                resource: 'messages'
+            };
+
+            return {
+                success: true,
+                subscriptions: [subscription]
+            };
+        } catch (error) {
+            throw new Error(`Failed to list Gmail subscriptions: ${error.message}`);
+        }
+    }
+
+    async deleteSubscription(subscriptionId) {
+        try {
+            if (!this.accessToken) {
+                throw new Error('Not authenticated');
+            }
+
+            // Gmail doesn't use individual subscriptionIds - it stops all push notifications for the user
+            // The subscriptionId parameter is ignored for Gmail (kept for interface consistency)
+            const data = await this.makeGmailRequest(
+                'https://gmail.googleapis.com/gmail/v1/users/me/stop',
+                {
+                    method: 'POST'
+                }
+            );
+
+            consoleHelper("DELETE SUBSCRIPTION GMAIL PROVIDER RES", data);
+
+            // Update the EmailConfig to mark watch as inactive
+            const metadataUpdate = {
+                'metadata.watch.active': false,
+                'metadata.watch.stopped_at': new Date()
+            };
+
+            const updatedEmailConfig = await EmailConfig.updateOne(
+                { _id: this.accountId },
+                { $set: metadataUpdate }
+            );
+
+            return { 
+                success: true,
+                data: {
+                    stopped: true,
+                    message: 'Gmail push notifications stopped successfully',
+                    subscriptionId: `gmail_config_id_${this.accountId}`
+                },
+            };
+        } catch (error) {
+            throw new Error(`Failed to delete Gmail subscription: ${error.message}`);
         }
     }
 }
