@@ -882,6 +882,12 @@ export class OutlookProvider extends BaseEmailProvider {
             let user = await EmailConfig.findOne({ _id: accountId });
             if (!user) throw new Error(`User with ID ${accountId} not found.`);
 
+            // Ensure metadata field exists on the document
+            if (!user.metadata) {
+                await EmailConfig.updateOne({ _id: accountId }, { $set: { metadata: {} } });
+                user = await EmailConfig.findOne({ _id: accountId });
+            }
+
             user.metadata = user.metadata || {};
             const existingSubscriptions = user.metadata.subscriptions || [];
 
@@ -893,9 +899,13 @@ export class OutlookProvider extends BaseEmailProvider {
                 user.metadata = user.metadata || {};
             }
 
-            // Ensure subscriptions array is ready
-            if (!Array.isArray(user.metadata.subscriptions)) {
-                user.metadata.subscriptions = [];
+            // Ensure subscriptions array exists and is ready
+            if (!user.metadata.subscriptions || !Array.isArray(user.metadata.subscriptions)) {
+                await EmailConfig.updateOne(
+                    { _id: accountId },
+                    { $set: { 'metadata.subscriptions': [] } }
+                );
+                user = await EmailConfig.findOne({ _id: accountId });
             }
 
             // Now create new subscriptions
@@ -926,9 +936,12 @@ export class OutlookProvider extends BaseEmailProvider {
                 });
             }
 
-            // Save all subscriptions at once
-            user.markModified('metadata');
-            await user.save();
+            // Save all subscriptions at once using direct update to ensure persistence
+            await EmailConfig.updateOne(
+                { _id: accountId },
+                { $set: { 'metadata.subscriptions': user.metadata.subscriptions } }
+            );
+            
             console.log(`Subscriptions saved for user ${user._id}:`, user.metadata.subscriptions.map(s => s.subscriptionId));
 
             return {
@@ -1003,10 +1016,11 @@ export class OutlookProvider extends BaseEmailProvider {
             }
         }
 
-        // Clear all subscriptions from database
-        user.metadata.subscriptions = [];
-        user.markModified('metadata');
-        await user.save();
+        // Clear all subscriptions from database using direct update
+        await EmailConfig.updateOne(
+            { _id: accountId },
+            { $set: { 'metadata.subscriptions': [] } }
+        );
         consoleHelper(`✅ Cleared all subscriptions from database`);
 
         return {
