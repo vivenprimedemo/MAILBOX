@@ -702,14 +702,14 @@ export class GmailProvider extends BaseEmailProvider {
 
         // Headers
         message += `From: ${this.config.auth.user}\r\n`;
-        message += `To: ${request.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+        message += `To: ${request.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
 
         if (request.cc?.length) {
-            message += `Cc: ${request.cc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+            message += `Cc: ${request.cc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
         }
 
         if (request.bcc?.length) {
-            message += `Bcc: ${request.bcc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}<${addr.address}>`).join(', ')}\r\n`;
+            message += `Bcc: ${request.bcc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
         }
 
         message += `Subject: ${request.subject}\r\n`;
