@@ -785,34 +785,36 @@ export class GmailProvider extends BaseEmailProvider {
             throw new Error('Original email not found');
         }
 
+        // Use HTML if available, else fallback to text
+        const originalContent = originalEmail.bodyHtml || `<pre>${originalEmail.bodyText || ""}</pre>`;
+
+        const forwardedHeader = `
+            <div style="margin:8px 0; padding:6px; border-left:3px solid #ccc; font-size:14px; line-height:1.4; margin-top:0; margin-bottom:0;">
+                <div>---------- Forwarded message ---------</div>
+                <div><strong>From:</strong> ${originalEmail.from.name ? `"${originalEmail.from.name}" ` : ""}&lt;${originalEmail.from.address}&gt;</div>
+                <div><strong>Date:</strong> ${originalEmail.date.toLocaleString()}</div>
+                <div><strong>Subject:</strong> ${originalEmail.subject}</div>
+                <div><strong>To:</strong> ${originalEmail.to.map(addr =>
+                `${addr.name ? `"${addr.name}" ` : ""}&lt;${addr.address}&gt;`
+            ).join(", ")}</div>
+            </div>
+         `;
+
         const forwardedContent = `
-            ${message || ""}
+            <div style="font-family:Arial, sans-serif; font-size:14px; line-height:1.4;">
+                ${message ? `<div style="margin-bottom:8px;">${message}</div>` : ""}
+                ${forwardedHeader}
+                <div style="margin-top:8px;">${originalContent}</div>
+            </div>
+        `;
 
-            ---------- Forwarded message ---------
-            From: ${originalEmail.from.name ? `"${originalEmail.from.name}" ` : ""
-            }<${originalEmail.from.address}>
-            Date: ${originalEmail.date.toLocaleString()}
-            Subject: ${originalEmail.subject}
-            To: ${originalEmail.to
-                .map(
-                    (addr) =>
-                        `${addr.name ? `"${addr.name}" ` : ""}<${addr.address}>`
-                )
-                .join(", ")}
-
-            ${originalEmail.bodyText || originalEmail.bodyHtml || ""}
-          `;
-
-        // Fetch attachment data for each attachment
+        // Attachments remain unchanged
         let attachmentsWithData = [];
-        if (originalEmail.attachments && originalEmail.attachments.length > 0) {
+        if (originalEmail.attachments?.length > 0) {
             attachmentsWithData = await Promise.all(
                 originalEmail.attachments.map(async (att) => {
                     try {
-                        const attachmentData = await this.getAttachment(
-                            originalEmail.id,
-                            att.attachmentId
-                        );
+                        const attachmentData = await this.getAttachment(originalEmail.id, att.attachmentId);
                         return {
                             filename: att.filename,
                             content: attachmentData.data,
@@ -823,15 +825,13 @@ export class GmailProvider extends BaseEmailProvider {
                         return null;
                     }
                 })
-            );
-            // Filter out failed attachments
-            attachmentsWithData = attachmentsWithData.filter((att) => att !== null);
+            ).then(arr => arr.filter(Boolean));
         }
 
         return this.sendEmail({
             to,
             subject: `Fwd: ${originalEmail.subject}`,
-            bodyText: forwardedContent,
+            bodyHtml: forwardedContent,
             attachments: attachmentsWithData,
         });
     }
