@@ -105,7 +105,15 @@ export class GmailProvider extends BaseEmailProvider {
         }
 
         if (!response.ok) {
-            throw new Error(`Gmail API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            consoleHelper('Gmail API error details:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorBody: errorText,
+                url: url,
+                options: options
+            });
+            throw new Error(`Gmail API error: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
         // Handle empty responses (like the /stop endpoint which returns 204 No Content)
@@ -700,16 +708,33 @@ export class GmailProvider extends BaseEmailProvider {
         const boundary = `----boundary_${Date.now()}`;
         let message = '';
 
-        // Headers
-        message += `From: ${this.config.auth.user}\r\n`;
-        message += `To: ${request.to.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
+        // Headers - use the email from config or 'me' for Gmail
+        const fromEmail = this.config.email || this.config.auth?.email || 'me';
+        message += `From: ${fromEmail}\r\n`;
+        message += `To: ${request.to.map(addr => {
+            // Ensure the address is properly formatted and not empty/undefined
+            if (!addr.address || !addr.address.includes('@')) {
+                throw new Error(`Invalid email address: ${addr.address}`);
+            }
+            return addr.name ? `"${addr.name}" <${addr.address}>` : addr.address;
+        }).join(', ')}\r\n`;
 
         if (request.cc?.length) {
-            message += `Cc: ${request.cc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
+            message += `Cc: ${request.cc.map(addr => {
+                if (!addr.address || !addr.address.includes('@')) {
+                    throw new Error(`Invalid CC email address: ${addr.address}`);
+                }
+                return addr.name ? `"${addr.name}" <${addr.address}>` : addr.address;
+            }).join(', ')}\r\n`;
         }
 
         if (request.bcc?.length) {
-            message += `Bcc: ${request.bcc.map(addr => `${addr.name ? `"${addr.name}" ` : ''}${addr.address}`).join(', ')}\r\n`;
+            message += `Bcc: ${request.bcc.map(addr => {
+                if (!addr.address || !addr.address.includes('@')) {
+                    throw new Error(`Invalid BCC email address: ${addr.address}`);
+                }
+                return addr.name ? `"${addr.name}" <${addr.address}>` : addr.address;
+            }).join(', ')}\r\n`;
         }
 
         message += `Subject: ${request.subject}\r\n`;
@@ -769,8 +794,18 @@ export class GmailProvider extends BaseEmailProvider {
             throw new Error('Original email not found');
         }
 
+        // Ensure we have a valid email address
+        if (!originalEmail?.from?.address) {
+            throw new Error('Original email has no valid sender address');
+        }
+
+        const replyTo = [{
+            address: originalEmail.from.address,
+            name: originalEmail.from.name || ''
+        }];
+
         return this.sendEmail({
-            to: [{ address: originalEmail?.from?.address, name: originalEmail?.from?.name }],
+            to: replyTo,
             subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
             inReplyTo: originalEmail?.messageId,
             references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),
@@ -881,8 +916,6 @@ export class GmailProvider extends BaseEmailProvider {
                 }
             );
     
-            consoleHelper("WATCH EMAIL ACCOUNT GMAIL PROVIDER RES", data);
-    
             const { historyId, expiration } = data;
     
             // Prepare metadata update
@@ -956,8 +989,6 @@ export class GmailProvider extends BaseEmailProvider {
                     method: 'POST'
                 }
             );
-
-            consoleHelper("DELETE SUBSCRIPTION GMAIL PROVIDER RES", data);
 
             // Update the EmailConfig to mark watch as inactive
             const metadataUpdate = {

@@ -47,7 +47,7 @@ router.put('/accounts/:accountId/emails/move', validate(schemas.moveEmails), Ema
 
 // Send/Reply/Forward operations (with rate limiting)
 router.post('/accounts/:accountId/send', emailSendLimiter, validate(schemas.sendEmail), EmailController.sendEmail);
-router.post('/accounts/:accountId/reply/:messageId', emailSendLimiter, EmailController.replyToEmail);
+router.post('/accounts/:accountId/reply/:messageId', emailSendLimiter, validate(schemas.replyEmail), EmailController.replyToEmail);
 router.post('/accounts/:accountId/forward/:messageId', emailSendLimiter, EmailController.forwardEmail);
 
 // Sync operations

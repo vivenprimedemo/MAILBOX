@@ -160,6 +160,30 @@ export const schemas = {
         nextPage: Joi.string().optional(),
     }),
 
+    replyEmail: Joi.object({
+        bodyText: Joi.string().optional(),
+        bodyHtml: Joi.string().optional(),
+        cc: Joi.array().items(
+            Joi.object({
+                name: Joi.string().optional(),
+                address: Joi.string().email().required()
+            })
+        ).optional(),
+        bcc: Joi.array().items(
+            Joi.object({
+                name: Joi.string().optional(),
+                address: Joi.string().email().required()
+            })
+        ).optional(),
+        attachments: Joi.array().items(
+            Joi.object({
+                filename: Joi.string().required(),
+                content: Joi.string().required(),
+                contentType: Joi.string().optional()
+            })
+        ).optional()
+    }).or('bodyText', 'bodyHtml'),
+
     updatePreferences: Joi.object({
         threadsEnabled: Joi.boolean().optional(),
         autoMarkAsRead: Joi.boolean().optional(),
