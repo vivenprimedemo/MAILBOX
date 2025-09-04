@@ -60,8 +60,6 @@ export class WebhookController {
                 emailConfig
             })
 
-            const contactFrom = await emailProcesses.handleCreateContact(accessToken, emailMessage?.from?.address);
-            const contactTo = await emailProcesses.handleCreateContact(accessToken, emailMessage?.to?.[0]?.address);
             const contactFrom = await emailProcesses.handleCreateContact(accessToken, emailMessage?.from?.address, emailMessage?.from?.name);
             const contactTo = await emailProcesses.handleCreateContact(accessToken, emailMessage?.to?.[0]?.address, emailMessage?.to?.[0]?.name);
             const activity = await emailProcesses.handleCreateActivity(accessToken, emailMessage, [contactFrom, contactTo], direction, emailConfigId);
