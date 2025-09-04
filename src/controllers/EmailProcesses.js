@@ -2,7 +2,7 @@ import { consoleHelper } from "../../consoleHelper.js";
 import { payloadService } from "../services/payload.js";
 
 export const emailProcesses = {
-    async handleCreateContact(payloadToken , emailAddress) {
+    async handleCreateContact(payloadToken, emailAddress, contactName) {
         const contacts = await payloadService.find(payloadToken, 'contacts', {
             queryParams: [`where[email][equals]=${emailAddress}`]
         })
@@ -15,7 +15,7 @@ export const emailProcesses = {
 
         const contactPayload = {
             email: emailAddress,
-            first_name: emailAddress?.split('@')[0],
+            first_name: contactName || emailAddress?.split('@')[0],
         };
         const response = await payloadService.create(payloadToken, "contacts", contactPayload);
         consoleHelper("contact create res", response?.data?.doc?.email)
