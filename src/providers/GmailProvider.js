@@ -97,6 +97,9 @@ export class GmailProvider extends BaseEmailProvider {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        }).catch((error) => {
+            consoleHelper("GMAIL REQUEST FAILED", error);
+            throw error;
         });
 
         if (response.status === 401 && this.refreshToken) {
@@ -105,15 +108,9 @@ export class GmailProvider extends BaseEmailProvider {
         }
 
         if (!response.ok) {
-            const errorText = await response.text();
-            consoleHelper('Gmail API error details:', {
-                status: response.status,
-                statusText: response.statusText,
-                errorBody: errorText,
-                url: url,
-                options: options
-            });
-            throw new Error(`Gmail API error: ${response.status} ${response.statusText} - ${errorText}`);
+            const error = new Error(`Gmail API error: ${response.status} ${response.statusText}`);
+            consoleHelper("GMAIL REQUEST FAILED", error);
+            throw error;
         }
 
         // Handle empty responses (like the /stop endpoint which returns 204 No Content)
@@ -777,10 +774,19 @@ export class GmailProvider extends BaseEmailProvider {
                     continue;
                 }
 
-                const content = Buffer.isBuffer(attachment.content)
-                    ? attachment.content
-                    : Buffer.from(attachment.content);
-                message += content.toString('base64') + '\r\n\r\n';
+                // Check if content is already base64-encoded string or raw binary
+                let base64Content;
+                if (typeof attachment.content === 'string') {
+                    // Content is already base64-encoded
+                    base64Content = attachment.content;
+                } else {
+                    // Content is raw binary data (Buffer)
+                    const content = Buffer.isBuffer(attachment.content)
+                        ? attachment.content
+                        : Buffer.from(attachment.content);
+                    base64Content = content.toString('base64');
+                }
+                message += base64Content + '\r\n\r\n';
             }
         }
 
@@ -789,29 +795,33 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     async replyToEmail(originalMessageId, options) {
-        const originalEmail = await this.getEmail(originalMessageId);
-        if (!originalEmail || !originalEmail?.messageId) {
-            throw new Error('Original email not found');
+        try {
+            const originalEmail = await this.getEmail(originalMessageId);
+            if (!originalEmail || !originalEmail?.messageId) {
+                throw new Error(`Original email with ID ${originalMessageId} not found`);
+            }
+
+            // Ensure we have a valid email address
+            if (!originalEmail?.from?.address) {
+                throw new Error('Original email has no valid sender address');
+            }
+
+            const replyTo = [{
+                address: originalEmail.from.address,
+                name: originalEmail.from.name || ''
+            }];
+
+            return this.sendEmail({
+                to: replyTo,
+                subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
+                inReplyTo: originalEmail?.messageId,
+                references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),
+                threadId: originalEmail?.threadId,
+                ...options
+            });
+        } catch (error) {
+            throw error;
         }
-
-        // Ensure we have a valid email address
-        if (!originalEmail?.from?.address) {
-            throw new Error('Original email has no valid sender address');
-        }
-
-        const replyTo = [{
-            address: originalEmail.from.address,
-            name: originalEmail.from.name || ''
-        }];
-
-        return this.sendEmail({
-            to: replyTo,
-            subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
-            inReplyTo: originalEmail?.messageId,
-            references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),
-            threadId: originalEmail?.threadId,
-            ...options
-        });
     }
 
     async forwardEmail(originalMessageId, to, message) {

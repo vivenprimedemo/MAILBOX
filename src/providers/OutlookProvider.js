@@ -753,9 +753,11 @@ export class OutlookProvider extends BaseEmailProvider {
                 '@odata.type': '#microsoft.graph.fileAttachment',
                 name: attachment.filename,
                 contentType: attachment.contentType || 'application/octet-stream',
-                contentBytes: Buffer.isBuffer(attachment.content)
-                    ? attachment.content.toString('base64')
-                    : Buffer.from(attachment.content).toString('base64')
+                contentBytes: typeof attachment.content === 'string'
+                    ? attachment.content
+                    : Buffer.isBuffer(attachment.content)
+                        ? attachment.content.toString('base64')
+                        : Buffer.from(attachment.content).toString('base64')
             }));
         }
 
@@ -781,9 +783,11 @@ export class OutlookProvider extends BaseEmailProvider {
                 '@odata.type': '#microsoft.graph.fileAttachment',
                 name: attachment.filename,
                 contentType: attachment.contentType || 'application/octet-stream',
-                contentBytes: Buffer.isBuffer(attachment.content)
-                    ? attachment.content.toString('base64')
-                    : Buffer.from(attachment.content).toString('base64')
+                contentBytes: typeof attachment.content === 'string'
+                    ? attachment.content
+                    : Buffer.isBuffer(attachment.content)
+                        ? attachment.content.toString('base64')
+                        : Buffer.from(attachment.content).toString('base64')
             }));
         }
 
