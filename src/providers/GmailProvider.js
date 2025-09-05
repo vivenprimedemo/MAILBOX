@@ -652,11 +652,21 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     async updateLabels(messageIds, addLabelIds, removeLabelIds) {
-        const batchRequest = {
-            ids: messageIds,
-            addLabelIds,
-            removeLabelIds
-        };
+        // Validate input
+        if (!messageIds || messageIds.length === 0) {
+            throw new Error('No message IDs provided for label update');
+        }
+
+        // Gmail API doesn't accept empty arrays, so only include non-empty arrays
+        const batchRequest = { ids: messageIds };
+        
+        if (addLabelIds && addLabelIds.length > 0) {
+            batchRequest.addLabelIds = addLabelIds;
+        }
+        
+        if (removeLabelIds && removeLabelIds.length > 0) {
+            batchRequest.removeLabelIds = removeLabelIds;
+        }
 
         await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
             method: 'POST',
