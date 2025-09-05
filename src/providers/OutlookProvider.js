@@ -688,17 +688,31 @@ export class OutlookProvider extends BaseEmailProvider {
         await Promise.all(updatePromises);
     }
 
-    async deleteEmails(request) {
+    async deleteEmails(messageIds, folder) {
+        
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }
 
-        const deletePromises = request.messageIds.map(messageId =>
-            this.graphClient.api(`/me/messages/${messageId}`).delete()
-        );
+        // Handle both array format and object format for backward compatibility
+        const ids = Array.isArray(messageIds) ? messageIds : messageIds.messageIds;
+        
+        // Validate input
+        if (!ids || ids.length === 0) {
+            throw new Error('No message IDs provided for deletion');
+        }
 
-        await Promise.all(deletePromises);
-        return { deleted: request.messageIds.length };
+        try {
+            const deletePromises = ids.map(messageId =>
+                this.graphClient.api(`/me/messages/${messageId}`).delete()
+            );
+
+            await Promise.all(deletePromises);
+            return { deleted: ids.length };
+        } catch (error) {
+            console.error('Outlook delete failed:', error);
+            throw new Error(`Failed to delete Outlook emails: ${error.message}`);
+        }
     }
 
     async moveEmails(request) {
@@ -713,7 +727,10 @@ export class OutlookProvider extends BaseEmailProvider {
         );
 
         await Promise.all(movePromises);
-        return { moved: request.messageIds.length };
+        return { 
+            data: { moved: request.messageIds.length },
+            metadata: { provider: 'outlook' }
+        };
     }
 
     async sendEmail(options) {

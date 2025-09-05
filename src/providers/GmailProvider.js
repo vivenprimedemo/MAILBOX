@@ -652,6 +652,7 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     async updateLabels(messageIds, addLabelIds, removeLabelIds) {
+        console.log('Gmail updateLabels request:', JSON.stringify({ messageIds, addLabelIds, removeLabelIds }, null, 2));
         // Validate input
         if (!messageIds || messageIds.length === 0) {
             throw new Error('No message IDs provided for label update');
@@ -668,26 +669,56 @@ export class GmailProvider extends BaseEmailProvider {
             batchRequest.removeLabelIds = removeLabelIds;
         }
 
+        console.log('Gmail batchModify request:', JSON.stringify(batchRequest, null, 2));
+
         await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
             method: 'POST',
             body: JSON.stringify(batchRequest)
         });
     }
 
-    async deleteEmails(request) {
-        const batchRequest = { ids: request.messageIds };
+    async deleteEmails(messageIds, folder) {
+        
+        // Handle both array format and object format for backward compatibility
+        const ids = Array.isArray(messageIds) ? messageIds : messageIds.messageIds;
+        
+        // Validate input
+        if (!ids || ids.length === 0) {
+            throw new Error('No message IDs provided for deletion');
+        }
 
-        await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchDelete', {
-            method: 'POST',
-            body: JSON.stringify(batchRequest)
-        });
+        const batchRequest = { ids };
 
-        return { deleted: request.messageIds.length };
+        try {
+            await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchDelete', {
+                method: 'POST',
+                body: JSON.stringify(batchRequest)
+            });
+
+            return { deleted: ids.length };
+        } catch (error) {
+            console.error('Gmail batchDelete failed:', error);
+            // If batchDelete fails, try moving to trash instead
+            console.log('Attempting to move emails to trash instead of permanent deletion...');
+            await this.updateLabels(ids, ['TRASH'], ['INBOX']);
+            return { deleted: ids.length, moved_to_trash: true };
+        }
     }
 
     async moveEmails(request) {
-        await this.updateLabels(request.messageIds, [request.destinationFolder], [request.sourceFolder]);
-        return { moved: request.messageIds.length };
+        if (request.destinationFolder.toLowerCase() === 'archive' ) {
+            await this.updateLabels(request.messageIds, [], ['INBOX']);
+            return { 
+                data: { moved: request.messageIds.length },
+                metadata: { provider: 'gmail' }
+            };
+        }
+            
+        await this.updateLabels(request.messageIds, [request.destinationFolder.toUpperCase()], [request.sourceFolder.toUpperCase()]);
+        return { 
+            data: { moved: request.messageIds.length },
+            metadata: { provider: 'gmail' }
+        };
     }
 
     async sendEmail(request) {

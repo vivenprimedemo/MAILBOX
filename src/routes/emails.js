@@ -42,7 +42,7 @@ router.put('/accounts/:accountId/emails/read', validate(schemas.markEmails), Ema
 router.put('/accounts/:accountId/emails/unread', validate(schemas.markEmails), EmailController.markAsUnread);
 router.put('/accounts/:accountId/emails/flag', validate(schemas.markEmails), EmailController.markAsFlagged);
 router.put('/accounts/:accountId/emails/unflag', validate(schemas.markEmails), EmailController.markAsUnflagged);
-router.delete('/accounts/:accountId/emails', validate(schemas.markEmails), EmailController.deleteEmails);
+router.put('/accounts/:accountId/emails/delete', validate(schemas.markEmails), EmailController.deleteEmails);
 router.put('/accounts/:accountId/emails/move', validate(schemas.moveEmails), EmailController.moveEmails);
 
 // Send/Reply/Forward operations (with rate limiting)

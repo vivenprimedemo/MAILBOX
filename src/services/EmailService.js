@@ -507,8 +507,15 @@ export class EmailService {
             throw error;
         }
 
-        const response = await provider.moveEmails(messageIds, fromFolder, toFolder);
-        if (response && response.data) {
+        // Create proper request object for providers
+        const moveRequest = {
+            messageIds,
+            sourceFolder: fromFolder,
+            destinationFolder: toFolder
+        };
+
+        const response = await provider.moveEmails(moveRequest);
+        if (response && (response.data || response.moved)) {
             // Update local cache
             await Email.updateMany(
                 { messageId: { $in: messageIds } },
