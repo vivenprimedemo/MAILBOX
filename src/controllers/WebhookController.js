@@ -60,6 +60,14 @@ export class WebhookController {
                 emailConfig
             })
 
+            const isneverLogged = await emailProcesses.handleIsEmailNeverLogged(accessToken, emailMessage, emailConfigId);
+            if (isneverLogged) {
+                consoleHelper('Email is Blocked');
+                return;
+            }
+
+            consoleHelper("Email is logged");
+
             const contactFrom = await emailProcesses.handleCreateContact(accessToken, emailMessage?.from?.address, emailMessage?.from?.name);
             const contactTo = await emailProcesses.handleCreateContact(accessToken, emailMessage?.to?.[0]?.address, emailMessage?.to?.[0]?.name);
             const activity = await emailProcesses.handleCreateActivity(accessToken, emailMessage, [contactFrom, contactTo], direction, emailConfigId);
