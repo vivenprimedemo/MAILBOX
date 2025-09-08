@@ -35,7 +35,7 @@ router.get('/accounts/:accountId/search', validateQuery(schemas.search), EmailCo
 
 // Thread operations
 router.get('/accounts/:accountId/threads/:folder', validateQuery(schemas.search), EmailController.getThreads);
-router.get('/accounts/:accountId/thread/:threadId', EmailController.getThread);
+router.get('/accounts/:accountId/thread/:threadId', validateQuery(schemas.threadSort), EmailController.getThread);
 
 // Email actions
 router.put('/accounts/:accountId/emails/read', validate(schemas.markEmails), EmailController.markAsRead);

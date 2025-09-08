@@ -191,5 +191,10 @@ export const schemas = {
         syncInterval: Joi.number().integer().min(60000).max(3600000).optional(), // 1 min to 1 hour
         displayDensity: Joi.string().valid('comfortable', 'compact', 'cozy').optional(),
         theme: Joi.string().valid('light', 'dark', 'auto').optional()
+    }),
+
+    threadSort: Joi.object({
+        sortBy: Joi.string().valid('date', 'subject', 'from').default('date'),
+        sortOrder: Joi.string().valid('asc', 'desc').default('desc')
     })
 };

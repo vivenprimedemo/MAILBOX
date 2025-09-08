@@ -172,8 +172,9 @@ export class EmailController {
     static async getThread(req, res) {
         try {
             const { accountId, threadId } = req.params;
+            const { sortBy, sortOrder } = req.query;
 
-            const result = await EmailController.emailService.getThread(accountId, threadId, req.userId);
+            const result = await EmailController.emailService.getThread(accountId, threadId, req.userId, { sortBy, sortOrder });
             if (!result) {
                 res.status(404).json({
                     success: false,

@@ -546,7 +546,7 @@ export class GmailProvider extends BaseEmailProvider {
         return attachments;
     }
 
-    async getThread(threadId) {
+    async getThread(threadId, sortOptions = null) {
         try {
             const data = await this.makeGmailRequest(
                 `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`
@@ -556,7 +556,14 @@ export class GmailProvider extends BaseEmailProvider {
             if (emails.length === 0) return null;
 
             const threads = this.buildThreads(emails);
-            return threads[0] || null;
+            const thread = threads[0] || null;
+            
+            // Sort the messages within the thread if sort options are provided
+            if (thread && sortOptions) {
+                thread.emails = this.sortThreadMessages(thread.emails, sortOptions);
+            }
+            
+            return thread;
         } catch (error) {
             return null;
         }

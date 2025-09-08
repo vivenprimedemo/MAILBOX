@@ -575,13 +575,20 @@ export class IMAPProvider extends BaseEmailProvider {
         return emails.find(email => email.messageId === messageId) || null;
     }
 
-    async getThread(threadId) {
+    async getThread(threadId, sortOptions = null) {
         const emails = await this.getEmails({ folderId: 'INBOX', limit: 1000 });
         const threadEmails = emails.filter(email => email.threadId === threadId);
         if (threadEmails.length === 0) return null;
 
         const threads = this.buildThreads(threadEmails);
-        return threads[0] || null;
+        const thread = threads[0] || null;
+        
+        // Sort the messages within the thread if sort options are provided
+        if (thread && sortOptions) {
+            thread.emails = this.sortThreadMessages(thread.emails, sortOptions);
+        }
+        
+        return thread;
     }
 
     async getThreads(request) {

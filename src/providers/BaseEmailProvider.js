@@ -68,6 +68,39 @@ export class BaseEmailProvider {
         );
     }
 
+    sortThreadMessages(messages, sortOptions = null) {
+        if (!sortOptions || !messages || messages.length <= 1) {
+            return messages;
+        }
+
+        const { sortBy = 'date', sortOrder = 'desc' } = sortOptions;
+        const sortedMessages = [...messages];
+
+        sortedMessages.sort((a, b) => {
+            let comparison = 0;
+
+            switch (sortBy) {
+                case 'date':
+                    comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+                    break;
+                case 'subject':
+                    comparison = (a.subject || '').localeCompare(b.subject || '');
+                    break;
+                case 'from':
+                    const fromA = a.from?.address || a.from || '';
+                    const fromB = b.from?.address || b.from || '';
+                    comparison = fromA.localeCompare(fromB);
+                    break;
+                default:
+                    comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+            }
+
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
+
+        return sortedMessages;
+    }
+
     generateMessageId() {
         return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}@emailclient.local`;
     }
@@ -183,7 +216,7 @@ export class BaseEmailProvider {
      * @param {string} threadId - Thread ID
      * @returns {Promise<ApiResponse<EmailThread>>}
      */
-    async getThread(threadId) {
+    async getThread(threadId, sortOptions = null) {
         throw new Error('Method must be implemented by subclass');
     }
 

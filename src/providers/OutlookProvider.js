@@ -591,7 +591,7 @@ export class OutlookProvider extends BaseEmailProvider {
         }));
     }
 
-    async getThread(threadId) {
+    async getThread(threadId, sortOptions = null) {
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }
@@ -608,7 +608,14 @@ export class OutlookProvider extends BaseEmailProvider {
 
             const emails = messages.value.map(message => this.parseOutlookMessage(message));
             const threads = this.buildThreads(emails);
-            return threads[0] || null;
+            const thread = threads[0] || null;
+            
+            // Sort the messages within the thread if sort options are provided
+            if (thread && sortOptions) {
+                thread.emails = this.sortThreadMessages(thread.emails, sortOptions);
+            }
+            
+            return thread;
         } catch (error) {
             return null;
         }
