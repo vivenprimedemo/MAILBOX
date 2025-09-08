@@ -299,7 +299,8 @@ export class GmailProvider extends BaseEmailProvider {
                 to,
                 subject,
                 dateFrom,
-                dateTo
+                dateTo,
+                isListEmails = true
             } = request;
 
             let folderIds = folderId;
@@ -357,6 +358,17 @@ export class GmailProvider extends BaseEmailProvider {
                 this.getEmail(msg.id, folderIds)
             );
             const emails = (await Promise.all(emailPromises)).filter(Boolean);
+
+            // want the bodyhtml ,bodytext , attachment remove if isListEmails is true
+            if(isListEmails === 'true' || isListEmails === true) {
+                
+                emails.forEach((email) => {
+                    delete email.bodyHtml;
+                    delete email.bodyText;
+                    delete email.attachments;
+                });
+            }
+
 
             // 7️⃣ Build metadata
             const totalPages = Math.ceil(total / limit);
@@ -652,7 +664,6 @@ export class GmailProvider extends BaseEmailProvider {
     }
 
     async updateLabels(messageIds, addLabelIds, removeLabelIds) {
-        console.log('Gmail updateLabels request:', JSON.stringify({ messageIds, addLabelIds, removeLabelIds }, null, 2));
         // Validate input
         if (!messageIds || messageIds.length === 0) {
             throw new Error('No message IDs provided for label update');
@@ -668,8 +679,6 @@ export class GmailProvider extends BaseEmailProvider {
         if (removeLabelIds && removeLabelIds.length > 0) {
             batchRequest.removeLabelIds = removeLabelIds;
         }
-
-        console.log('Gmail batchModify request:', JSON.stringify(batchRequest, null, 2));
 
         await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
             method: 'POST',

@@ -354,7 +354,8 @@ export class EmailController {
                 dateFrom,
                 dateTo,
                 useCache = true,
-                nextPage = ""
+                nextPage = "",
+                isListEmails = true //if true than listEmails else wholebody data 
             } = req.query;
 
             // Parse boolean query parameters
@@ -377,7 +378,8 @@ export class EmailController {
                 search,
                 filters,
                 useCache: useCache !== 'false',
-                nextPage
+                nextPage,
+                isListEmails
             };
 
             const result = await EmailController.emailService.listEmailsV2(

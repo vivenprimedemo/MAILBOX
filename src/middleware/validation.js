@@ -158,6 +158,7 @@ export const schemas = {
         dateTo: Joi.date().iso().optional(),
         useCache: Joi.boolean().default(true),
         nextPage: Joi.string().optional(),
+        isListEmails: Joi.boolean().default(true),
     }),
 
     replyEmail: Joi.object({

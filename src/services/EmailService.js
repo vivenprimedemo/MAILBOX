@@ -229,7 +229,8 @@ export class EmailService {
             search = '',
             filters = {},
             useCache = true,
-            nextPage = ""
+            nextPage = "",
+            isListEmails = true
         } = options;
 
         // Build enhanced request object
@@ -250,7 +251,8 @@ export class EmailService {
             subject: filters.subject,
             dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
             dateTo: filters.dateTo ? new Date(filters.dateTo) : undefined,
-            nextPage
+            nextPage,
+            isListEmails
         };
 
         try {

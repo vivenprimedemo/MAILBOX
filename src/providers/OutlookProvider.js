@@ -324,7 +324,8 @@ export class OutlookProvider extends BaseEmailProvider {
                 subject,
                 dateFrom,
                 dateTo,
-                nextPage = null
+                nextPage = null,
+                isListEmails = true
             } = request;
 
             if (!this.graphClient) throw new Error('Not connected to Outlook');
@@ -380,6 +381,15 @@ export class OutlookProvider extends BaseEmailProvider {
             const emails = messages.value.map(msg => this.parseOutlookMessage(msg, folderId));
 
             const hasMore = !!messages['@odata.nextLink'];
+
+            // want the bodyhtml ,bodytext , attachment remove if isListEmails is true
+            if(isListEmails === 'true' || isListEmails === true) {
+                emails.forEach((email) => {
+                    delete email.bodyHtml;
+                    delete email.bodyText;
+                    delete email.attachments;
+                });
+            }
 
             return {
                 emails,
