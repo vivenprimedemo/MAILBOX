@@ -314,6 +314,14 @@ export class BaseEmailProvider {
         throw new Error('Method must be implemented by subclass');
     }
 
+    /**
+     * Get email signature
+     * @returns {Promise<ApiResponse<EmailSignature>>}
+     */
+    async getSignature() {
+        throw new Error('Method must be implemented by subclass');
+    }
+
     // Helper methods for subclasses to use
 
     /**

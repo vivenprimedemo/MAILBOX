@@ -95,19 +95,7 @@ export class OutlookProvider extends BaseEmailProvider {
 
         const tokenRequest = {
             refreshToken: this.refreshToken,
-            scopes: ['email',
-                'https://graph.microsoft.com/IMAP.AccessAsUser.All',
-                'https://graph.microsoft.com/Mail.Read',
-                'https://graph.microsoft.com/Mail.Read.Shared',
-                'https://graph.microsoft.com/Mail.ReadBasic',
-                'https://graph.microsoft.com/Mail.Send',
-                'https://graph.microsoft.com/Mail.Send.Shared',
-                'https://graph.microsoft.com/Mail.ReadWrite',
-                'https://graph.microsoft.com/MailboxFolder.Read',
-                'offline_access',
-                'openid',
-                'profile',
-                'https://graph.microsoft.com/User.Read'],
+            scopes: config.SCOPES.outlook,
         };
 
         try {
@@ -988,6 +976,10 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 }
 
+
+    async getSignature() {
+        throw new Error('Microsoft Graph APIs do not support getting signatures');
+    }
 
     async deleteSubscription(accountId) {
     if (!this.graphClient) {

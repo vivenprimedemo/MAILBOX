@@ -1063,4 +1063,38 @@ export class EmailController {
             });
         }
     }
+
+    static async getSignature(req, res) {
+        try {
+            const { accountId } = req.params;
+
+            const result = await EmailController.emailService.getSignature(accountId, req.userId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: result.error || null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to get signature', { 
+                error: error.message, 
+                stack: error.stack, 
+                accountId: req.params.accountId 
+            });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'GET_SIGNATURE_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to get signature',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
 }

@@ -63,4 +63,7 @@ router.post('/accounts/:accountId/watch', EmailController.watchEmailAccount);
 router.delete('/accounts/:accountId/watch', EmailController.deleteSubscription);
 router.get('/accounts/:accountId/watch', EmailController.listSubscriptions);
 
+// Signature operations
+router.get('/accounts/:accountId/signature', EmailController.getSignature);
+
 export default router;

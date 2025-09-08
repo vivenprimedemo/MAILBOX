@@ -1,6 +1,23 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+const outlook_scopes = [
+    'email',
+    'https://graph.microsoft.com/IMAP.AccessAsUser.All',
+    'https://graph.microsoft.com/Mail.Read',
+    'https://graph.microsoft.com/Mail.Read.Shared',
+    'https://graph.microsoft.com/Mail.ReadBasic',
+    'https://graph.microsoft.com/Mail.Send',
+    'https://graph.microsoft.com/Mail.Send.Shared',
+    'https://graph.microsoft.com/Mail.ReadWrite',
+    'https://graph.microsoft.com/MailboxFolder.Read',
+    'offline_access',
+    'openid',
+    'profile',
+    'https://graph.microsoft.com/User.Read',
+    'https://graph.microsoft.com/MailboxSettings.Read',
+];
+
 export const config = {
     // Server configuration
     PORT: parseInt(process.env.PORT || "3000"),
@@ -52,6 +69,12 @@ export const config = {
 
     // Version
     VERSION: process.env.npm_package_version || "1.0.0",
+
+    // OUTLOOK SCOPES
+    SCOPES: {
+        outlook: outlook_scopes,
+        gmail: [],
+    },
 };
 
 export const provider_config_map = {

@@ -1035,15 +1035,14 @@ export class GmailProvider extends BaseEmailProvider {
         }
     }
 
-    async deleteSubscription(subscriptionId) {
+    async deleteSubscription() {
         try {
             if (!this.accessToken) {
                 throw new Error('Not authenticated');
             }
 
             // Gmail doesn't use individual subscriptionIds - it stops all push notifications for the user
-            // The subscriptionId parameter is ignored for Gmail (kept for interface consistency)
-            const data = await this.makeGmailRequest(
+            await this.makeGmailRequest(
                 'https://gmail.googleapis.com/gmail/v1/users/me/stop',
                 {
                     method: 'POST'
@@ -1071,6 +1070,37 @@ export class GmailProvider extends BaseEmailProvider {
             };
         } catch (error) {
             throw new Error(`Failed to delete Gmail subscription: ${error.message}`);
+        }
+    }
+
+    async getSignature() {
+        try {
+            if (!this.accessToken) {
+                throw new Error('Not authenticated');
+            }
+
+            const settingsData = await this.makeGmailRequest(
+                'https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'
+            );
+
+            if (settingsData && settingsData.sendAs && settingsData.sendAs.length > 0) {
+                const primaryIdentity = settingsData.sendAs.find(identity => identity.isPrimary) || settingsData.sendAs[0];
+                return this.createSuccessResponse({
+                    signature: primaryIdentity.signature || '',
+                    provider: 'gmail',
+                    hasSignature: !!(primaryIdentity.signature),
+                    email: primaryIdentity.sendAsEmail || 'unknown'
+                });
+            }
+            return this.createSuccessResponse({
+                signature: '',
+                provider: 'gmail',
+                hasSignature: false,
+                message: 'No signature found'
+            });
+        } catch (error) {
+            return this.createErrorResponse('SIGNATURE_FETCH_ERROR', 
+                `Failed to fetch Gmail signature: ${error.message}`);
         }
     }
 }

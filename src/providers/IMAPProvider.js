@@ -788,4 +788,20 @@ ${originalEmail.bodyText || originalEmail.bodyHtml || ''}
             });
         });
     }
+
+    async getSignature() {
+        // IMAP doesn't have a direct way to fetch signatures as they're client-side
+        return this.createSuccessResponse({
+            signature: '',
+            provider: 'imap',
+            hasSignature: false,
+            message: 'IMAP signatures are managed client-side and not accessible via protocol'
+        });
+    }
+
+    async getAttachment(_messageId, _attachmentId) {
+        // Basic implementation - would need to be expanded based on actual IMAP attachment handling
+        return this.createErrorResponse('NOT_IMPLEMENTED', 
+            'Attachment retrieval not implemented for IMAP provider');
+    }
 }
