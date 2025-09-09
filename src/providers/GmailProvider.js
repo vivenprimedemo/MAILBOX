@@ -151,11 +151,22 @@ export class GmailProvider extends BaseEmailProvider {
         }
     }
 
+    buildGmailSearchQuery(folderId) {
+        // Handle Gmail category labels with proper search syntax
+        if (folderId.startsWith('CATEGORY_')) {
+            const categoryName = folderId.replace('CATEGORY_', '').toLowerCase();
+            return `category:${categoryName}`;
+        }
+        
+        // Handle standard folders/labels
+        return `in:${folderId}`;
+    }
+
     async getEmails(request) {
         try {
             const { folderId = 'INBOX', limit = 50, offset = 0, orderBy = 'date', order = 'desc' } = request;
 
-            let query = `in:${folderId}`;
+            let query = this.buildGmailSearchQuery(folderId);
             const params = new URLSearchParams({
                 maxResults: limit.toString(),
                 q: query
@@ -200,7 +211,7 @@ export class GmailProvider extends BaseEmailProvider {
             } = request;
 
             // Build Gmail search query
-            let query = `in:${folderId}`;
+            let query = this.buildGmailSearchQuery(folderId);
 
             // Add search text
             if (search) {
@@ -313,7 +324,7 @@ export class GmailProvider extends BaseEmailProvider {
             const total = labelInfo.messagesTotal || 0;
 
             // 2️⃣ Build Gmail search query
-            let query = `in:${folderId}`;
+            let query = this.buildGmailSearchQuery(folderId);
             if (search) query += ` ${search}`;
             if (from) query += ` from:${from}`;
             if (to) query += ` to:${to}`;
@@ -586,7 +597,7 @@ export class GmailProvider extends BaseEmailProvider {
             if (hasAttachment) searchQuery += ' has:attachment';
             if (isUnread) searchQuery += ' is:unread';
             if (isFlagged) searchQuery += ' is:starred';
-            if (folderId) searchQuery += ` in:${folderId}`;
+            if (folderId) searchQuery += ` ${this.buildGmailSearchQuery(folderId)}`;
 
             const params = new URLSearchParams({
                 q: searchQuery,
