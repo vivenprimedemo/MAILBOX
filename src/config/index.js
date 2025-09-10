@@ -14,8 +14,7 @@ const outlook_scopes = [
     'offline_access',
     'openid',
     'profile',
-    'https://graph.microsoft.com/User.Read',
-    'https://graph.microsoft.com/MailboxSettings.Read',
+    'https://graph.microsoft.com/User.Read'
 ];
 
 export const config = {
