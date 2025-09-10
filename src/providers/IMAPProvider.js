@@ -726,7 +726,10 @@ export class IMAPProvider extends BaseEmailProvider {
             html: options.bodyHtml,
             attachments: options.attachments,
             inReplyTo: options.inReplyTo,
-            references: options.references?.join(' ')
+            references: options.references?.join(' '),
+            headers: {
+                'X-CRM-IGNORE': 'true'
+            }
         };
 
         const info = await this.smtpTransporter.sendMail(mailOptions);

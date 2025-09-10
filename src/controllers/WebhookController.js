@@ -53,12 +53,8 @@ export class WebhookController {
             }
 
             // Log email processing information
-            logger.info('Processing email message');
-            console.log({
-                ...emailMessage,
-                direction,
-                emailConfig
-            })
+            process.env.NODE_ENV === 'development' && logger.info('Processing email message');
+            process.env.NODE_ENV === 'development' && console.log({...emailMessage, direction, emailConfig})
 
             const isneverLogged = await emailProcesses.handleIsEmailNeverLogged(accessToken, emailMessage, emailConfigId);
             if (isneverLogged) {
@@ -66,10 +62,9 @@ export class WebhookController {
                 return;
             }
 
-            consoleHelper("Email is logged");
-
             const contactFrom = await emailProcesses.handleCreateContact(accessToken, emailMessage?.from?.address, emailMessage?.from?.name);
             const contactTo = await emailProcesses.handleCreateContact(accessToken, emailMessage?.to?.[0]?.address, emailMessage?.to?.[0]?.name);
+            // const associatedDeals = await emailProcesses.handleFetchAssociatedDeals(accessToken, contactFrom?.id, contactTo?.id);
             const activity = await emailProcesses.handleCreateActivity(accessToken, emailMessage, [contactFrom, contactTo], direction, emailConfigId);
 
         } catch (error) {
@@ -341,9 +336,6 @@ export class WebhookController {
                         },
                     }
                 );
-                consoleHelper(
-                    `WEBHOOK: Updated historyId to ${historyResponse.data.historyId}`
-                );
             }
 
             return res.status(200).json({
@@ -487,7 +479,6 @@ export class WebhookController {
                                 );
                             }
 
-                            consoleHelper("Full Email Object:", fullEmail);
                             // Only log full email object if debug mode is enabled
                             if (process.env.DEBUG_WEBHOOKS === "true") {
                                 consoleHelper(

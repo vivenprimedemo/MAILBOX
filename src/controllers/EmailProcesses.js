@@ -9,8 +9,6 @@ export const emailProcesses = {
             queryParams: [`where[email][equals]=${emailAddress}`]
         })
 
-        consoleHelper("contact find res", contacts?.email)
-
         if(contacts?.length > 0) {
             return contacts?.[0];
         }
@@ -20,19 +18,21 @@ export const emailProcesses = {
             first_name: contactName || emailAddress?.split('@')[0],
         };
         const response = await payloadService.create(payloadToken, "contacts", contactPayload);
-        consoleHelper("contact create res", response?.data?.doc?.email)
+        consoleHelper("contact create res", response)
         return response?.data?.doc;
+        // TODO: create contact creation activity
     },
 
     async handleCreateActivity(payloadToken, emailMessage, contacts, direction, emailConfigId) {
         const activityPayload = {
             name: `Email Activity`,
-            type: "interaction",
+            event: "interaction",
             key: `email_${direction}_${emailMessage?.id || emailMessage?.messageId}`,
             performed_by: "66c5775a4cf9070e0378389d", // support's userId
-            associations: "contacts",
-            association_many: {
-                contacts: contacts?.map(contact => contact?.id)
+            entity_type: "contacts",
+            association: {
+                contacts: contacts?.map(contact => contact?.id),
+                // deals: deals?.map(deal => deal?.id),
             },
             module: {
                 name: "emails"
@@ -50,12 +50,29 @@ export const emailProcesses = {
                 type: direction,
             },
         }
-
         const res = await payloadService.create(payloadToken, "activity_logs", activityPayload);
         console.log("activity created id : " , res?.data?.doc?.id)
         return res;
     },
 
+    async handleFetchAssociatedDeals(payloadToken, contactFromId, contactToId) {
+        try {
+            const queryParams = [
+                `where[or][0][and][0][from.objectId][equals]=${contactFromId}`,
+                `where[or][1][and][0][to.objectId][equals]=${contactToId}`,
+                `where[or][2][and][0][from.objectId][equals]=${contactToId}`,
+                `where[or][3][and][0][to.objectId][equals]=${contactFromId}`,
+            ]
+            const deals = await payloadService.find(payloadToken, 'crm_associations', {
+                queryParams: queryParams
+            })
+            consoleHelper("associated deal id : ", deals?.map(deal => deal?.id))
+            return deals;
+        } catch (error) {
+            consoleHelper("deals find error", error)
+            return null;
+        }
+    },
 
     async handleIsEmailNeverLogged(payloadToken, emailMessage, emailConfigId) {
         const to = emailMessage?.to?.[0]?.address || "";

@@ -182,7 +182,8 @@ export const schemas = {
                 content: Joi.string().required(),
                 contentType: Joi.string().optional()
             })
-        ).optional()
+        ).optional(),
+        ignoreMessage: Joi.boolean().optional(),
     }).or('bodyText', 'bodyHtml'),
 
     updatePreferences: Joi.object({

@@ -491,7 +491,8 @@ export class GmailProvider extends BaseEmailProvider {
             priority: 'normal',
             size: message.sizeEstimate || 0,
             isEncrypted: false,
-            isSigned: false
+            isSigned: false,
+            ignoreMessage: getHeader(config.CRM_IGNORE_HEADER) || false,
         };
     }
 
@@ -803,6 +804,8 @@ export class GmailProvider extends BaseEmailProvider {
         }
 
         message += `Subject: ${request.subject}\r\n`;
+        
+        request.ignoreMessage && (message += `X-CRM-IGNORE: true\r\n`);
 
         if (request.inReplyTo) {
             message += `In-Reply-To: ${request.inReplyTo}\r\n`;

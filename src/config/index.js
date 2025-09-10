@@ -75,6 +75,9 @@ export const config = {
         outlook: outlook_scopes,
         gmail: [],
     },
+
+    // IGNORE HEADERS - custom header name to identify and ignore specific email messages
+    CRM_IGNORE_HEADER: 'X-CRM-IGNORE',
 };
 
 export const provider_config_map = {
