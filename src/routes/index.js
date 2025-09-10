@@ -22,7 +22,8 @@ router.get('/health', async (req, res) => {
             version: config.VERSION,
             database: {
                 status: dbHealthy ? 'connected' : 'disconnected',
-                ...dbInfo
+                readyState: dbInfo?.readyState,
+                isConnected: dbInfo?.isConnected,
             },
             memory: {
                 used: Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 100) / 100,
