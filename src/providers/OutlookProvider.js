@@ -541,6 +541,19 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     parseOutlookMessage(message, folder) {
+
+        const ignorePropertyVal =
+            (message?.singleValueExtendedProperties?.find(
+                prop => prop.id === config.CUSTOM_HEADERS.OUTLOOK
+            )?.value === "true");
+
+        const ignoreHeaderVal =
+            (message?.internetMessageHeaders?.find(
+                header => header.name === config.CUSTOM_HEADERS.CRM_IGNORE
+            )?.value === "true");
+
+        const ignoreMessage = ignorePropertyVal || ignoreHeaderVal;
+
         return {
             id: message.id,
             messageId: message.internetMessageId || message.id,
@@ -567,8 +580,7 @@ export class OutlookProvider extends BaseEmailProvider {
             provider: 'outlook',
             inReplyTo: null, // Not directly available in Graph API
             references: [], // Not directly available in Graph API
-            ignoreMessage: message?.singleValueExtendedProperties?.find(prop => prop.id === config.CUSTOM_HEADERS.OUTLOOK)?.value === "true",
-            internetMessageHeaders: message?.internetMessageHeaders?.find(header => header.name === config.CUSTOM_HEADERS.GOOGLE)?.value === "true",
+            ignoreMessage: ignoreMessage,
         };
     }
 
@@ -818,7 +830,7 @@ export class OutlookProvider extends BaseEmailProvider {
                 ],
                 internetMessageHeaders: [
                     {
-                        name: config.CUSTOM_HEADERS.GOOGLE,
+                        name: config.CUSTOM_HEADERS.CRM_IGNORE,
                         value: options.ignoreMessage.toString()
                     }
                 ]
