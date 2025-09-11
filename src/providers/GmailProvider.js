@@ -878,8 +878,20 @@ export class GmailProvider extends BaseEmailProvider {
                 name: originalEmail.from.name || ''
             }];
 
+            const finalTo = [
+                ...replyTo,
+                ...(options?.to || [])
+            ].map(recipient => ({
+                address: recipient.address,
+                ...(recipient.name && recipient.name.trim() ? { name: recipient.name.trim() } : {})
+            })).filter((recipient, index, self) => 
+                index === self.findIndex(r => r.address.toLowerCase() === recipient.address.toLowerCase())
+            )
+            //remove the to form the option
+            delete options.to;
+
             return this.sendEmail({
-                to: replyTo,
+                to: finalTo,
                 subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
                 inReplyTo: originalEmail?.messageId,
                 references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),

@@ -811,12 +811,24 @@ export class OutlookProvider extends BaseEmailProvider {
             throw new Error('Not connected to Outlook');
         }
 
-        const toRecipient = options?.to?.map(addr => ({
+        if(options?.to?.length > 0) {
+            options.to = options.to.map(addr => ({
+                address: addr?.address,
+                name: addr?.name || addr?.address
+            }));
+        }
+    
+        let toRecipient = options?.to?.map(addr => ({
             emailAddress: {
                 address: addr?.address,
                 name: addr?.name || addr?.address
             }
-        }));
+        })) || [];
+
+        //remove duplicate addresses
+        toRecipient = toRecipient.filter((recipient, index) => 
+            toRecipient.findIndex(r => r.emailAddress.address.toLowerCase() === recipient.emailAddress.address.toLowerCase()) === index
+        );
 
         const replyMessage = {
             comment: options.bodyHtml || options.bodyText  || '',
@@ -825,13 +837,13 @@ export class OutlookProvider extends BaseEmailProvider {
                 singleValueExtendedProperties: [
                     {
                         "id": config.CUSTOM_HEADERS.OUTLOOK,
-                        "value": options.ignoreMessage.toString()
+                        "value": (options.ignoreMessage || false).toString()
                     }
                 ],
                 internetMessageHeaders: [
                     {
                         name: config.CUSTOM_HEADERS.CRM_IGNORE,
-                        value: options.ignoreMessage.toString()
+                        value: (options.ignoreMessage || false).toString()
                     }
                 ]
             }

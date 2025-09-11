@@ -87,19 +87,19 @@ export const schemas = {
     sendEmail: Joi.object({
         to: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).min(1).required(),
         cc: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).optional(),
         bcc: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).optional(),
@@ -166,19 +166,19 @@ export const schemas = {
         bodyHtml: Joi.string().optional(),
         to: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).optional(),
         cc: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).optional(),
         bcc: Joi.array().items(
             Joi.object({
-                name: Joi.string().optional(),
+                name: Joi.string().allow('').optional(),
                 address: Joi.string().email().required()
             })
         ).optional(),
