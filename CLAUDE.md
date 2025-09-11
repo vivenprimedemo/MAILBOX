@@ -13,7 +13,7 @@ npm start        # Production mode
 **Testing:**
 ```bash
 npm test         # Run Jest tests
-node test-unified-api.js  # Test unified API structure
+node test-unified-api.js  # Test unified API structure and demonstrate request/response formats
 ```
 
 **Environment setup:**
@@ -26,6 +26,7 @@ cp .env.example .env     # Copy environment template
 - Ensure MongoDB is running on `mongodb://localhost:27017/email_client`
 - No migration scripts - uses Mongoose auto-schema
 - Database connection handled via singleton pattern in `src/config/database.js`
+- Main models: `User` (user accounts), `Email` (cached email data), `EmailConfig` (provider configurations)
 
 ## Architecture Overview
 
@@ -64,7 +65,14 @@ The system builds email threads using either:
 - Provider-native threading (Gmail/Outlook)
 - Subject-based fallback threading (`buildThreadsFromEmails`)
 
-Threading involves grouping emails by `threadId` or normalized subject, tracking participants, counts, and chronological ordering.
+Threading involves grouping emails by `threadId` or normalized subject, tracking participants, counts, and chronological ordering. The `BaseEmailProvider.buildThreads()` method provides common threading logic that providers can use or override.
+
+### Provider Instance Management
+
+`EmailService` maintains provider instances using a Map-based cache (`providerInstances`). Each provider is instantiated per email account and handles:
+- Connection management (connect/disconnect lifecycle)
+- Authentication token refresh
+- Provider-specific API calls with unified response formatting
 
 ## Configuration Structure
 
@@ -75,11 +83,16 @@ Threading involves grouping emails by `threadId` or normalized subject, tracking
 - Rate limiting configuration
 - CORS origins
 
-**Provider Configuration**: Each email account stores provider-specific config:
+**Provider Configuration**: Each email account stores provider-specific config in `EmailConfig` model:
 ```javascript
 {
   type: 'gmail|outlook|imap',
-  auth: { /* provider-specific auth */ }
+  auth: { /* provider-specific auth */ },
+  user_id: ObjectId,
+  email: 'user@example.com',
+  oauth_config: { access_token, refresh_token },
+  smtp_config: { /* IMAP/SMTP settings */ },
+  imap_config: { /* IMAP settings */ }
 }
 ```
 
@@ -94,9 +107,20 @@ Threading involves grouping emails by `threadId` or normalized subject, tracking
 ## API Route Structure
 
 Routes follow pattern: `/api/emails/accounts/:accountId/*`
-- All routes require JWT authentication
-- Account-specific middleware validates account ownership
+- All routes require JWT authentication via `authenticateToken` middleware
+- Account-specific middleware validates account ownership via `requireEmailAccount`
 - Rate limiting applied to send/reply/forward operations
+- Enhanced email listing via `/list-emails` and `/list-emailsV2` endpoints
+- Comprehensive API documentation available in `EMAIL_ROUTES.md`
+
+**Key Endpoints**:
+- `GET /folders` - Get account folders
+- `GET /list-emails` - Enhanced email listing with filtering/sorting
+- `GET /search` - Advanced email search
+- `POST /send` - Send new email
+- `POST /reply/:messageId` - Reply to email
+- `PUT /emails/read` - Mark emails as read
+- `GET /emails/:messageId/attachments/:attachmentId` - Download attachments
 
 ## Error Handling
 
@@ -130,6 +154,7 @@ Providers return consistent errors via `createApiError()` helper.
 - **No TypeScript**: Uses JSDoc comments for type hints
 - **Logging**: Winston-based logging with multiple transports (`logs/` directory)
 - **Graceful Shutdown**: Server handles SIGTERM/SIGINT with database cleanup
+- **Helper Utilities**: `consoleHelper.js` for debugging, `test-unified-api.js` for API structure validation
 
 ## Key Implementation Details
 
@@ -170,4 +195,26 @@ Providers return consistent errors via `createApiError()` helper.
 - Rate limiting and CORS settings
 - All loaded through `src/config/index.js`
 
-The codebase prioritizes **provider abstraction** and **unified API responses** - when adding new providers or modifying existing ones, maintain the same interface contracts defined in `BaseEmailProvider`.
+## Important Implementation Notes
+
+**Provider Abstraction**: The codebase prioritizes **provider abstraction** and **unified API responses**. When adding new providers or modifying existing ones:
+- Maintain the same interface contracts defined in `BaseEmailProvider`
+- Implement all required abstract methods (`connect`, `getEmails`, `sendEmail`, etc.)
+- Use the `createSuccessResponse` and `createErrorResponse` helper methods
+- Follow the unified request/response structures demonstrated in `test-unified-api.js`
+
+**Caching Strategy**: `EmailService` implements intelligent caching:
+- Checks MongoDB cache first (`getEmailsFromCache`) for better performance
+- Falls back to provider APIs and caches results (`cacheEmails`)
+- Cache can be bypassed with `useCache=false` parameter
+
+**Error Handling**: Providers should use structured error responses with consistent codes:
+- `PROVIDER_INITIALIZATION_FAILED` - Provider setup issues
+- `FETCH_EMAILS_ERROR` - General email retrieval errors
+- `SEND_EMAIL_ERROR` - Email sending failures
+- All errors include provider type and timestamp
+
+**Threading Implementation**: Email threading supports both:
+- Provider-native threading (Gmail `threadId`, Outlook conversation groups)
+- Fallback subject-based threading using `buildThreadsFromEmails()`
+- Thread participants, counts, and chronological ordering are automatically managed

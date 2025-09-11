@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './auth.js';
 import emailRoutes from './emails.js';
+import calendarRoutes from './calendar.js';
 import { Database } from '../config/database.js';
 import { config } from '../config/index.js';
 import webhookRoutes from './webhooks.js';
@@ -69,6 +70,7 @@ router.get('/', (req, res) => {
             endpoints: {
                 auth: '/api/auth',
                 emails: '/api/emails',
+                calendar: '/api/calendar',
                 health: '/api/health'
             },
             features: [
@@ -78,6 +80,8 @@ router.get('/', (req, res) => {
                 'Advanced search',
                 'Folder management',
                 'Attachment support',
+                'Google Calendar integration',
+                'Available slots detection',
                 'Rate limiting',
                 'Security middleware'
             ]
@@ -92,6 +96,7 @@ router.get('/', (req, res) => {
 // Mount route modules
 router.use('/auth', authRoutes);
 router.use('/emails', emailRoutes);
+router.use('/calendar', calendarRoutes);
 
 router.use('/webhook' , webhookRoutes)
 
@@ -110,8 +115,14 @@ router.use('*', (req, res) => {
                 'GET /api/health',
                 'POST /api/auth/register',
                 'POST /api/auth/login',
-                'GET /api/emails/accounts',
-                'POST /api/emails/accounts'
+                'GET /api/emails/accounts/:userId',
+                'POST /api/emails/accounts',
+                'GET /api/calendar/accounts/:userId',
+                'POST /api/calendar/accounts',
+                'GET /api/calendar/accounts/:accountId/calendars',
+                'GET /api/calendar/accounts/:accountId/events',
+                'POST /api/calendar/accounts/:accountId/events',
+                'GET /api/calendar/accounts/:accountId/available-slots'
             ]
         },
         metadata: {}
