@@ -1,8 +1,8 @@
 // Import dependencies
-import { EmailService } from '../services/EmailService.js';
-import { AuthService } from '../services/AuthService.js';
 import { logger } from '../config/logger.js';
 import { EmailConfig } from '../models/Email.js';
+import { AuthService } from '../services/AuthService.js';
+import { EmailService } from '../services/EmailService.js';
 
 export class EmailController {
     static emailService = new EmailService();
@@ -609,7 +609,6 @@ export class EmailController {
             const emailOptions = req.body;
 
             const result = await EmailController.emailService.sendEmail(accountId, emailOptions, req.userId);
-            console.log(result)
 
             res.status(201).json({
                 success: true,

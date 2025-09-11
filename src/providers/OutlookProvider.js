@@ -1,10 +1,10 @@
-import { BaseEmailProvider } from './BaseEmailProvider.js';
-import { Client } from '@microsoft/microsoft-graph-client';
 import { ConfidentialClientApplication } from '@azure/msal-node';
+import { Client } from '@microsoft/microsoft-graph-client';
 import 'isomorphic-fetch';
 import { consoleHelper } from '../../consoleHelper.js';
-import { EmailConfig } from '../models/Email.js';
 import { config } from '../config/index.js';
+import { EmailConfig } from '../models/Email.js';
+import { BaseEmailProvider } from './BaseEmailProvider.js';
 
 export class OutlookProvider extends BaseEmailProvider {
     constructor(config) {
@@ -530,7 +530,8 @@ export class OutlookProvider extends BaseEmailProvider {
         try {
             const message = await this.graphClient
                 .api(`/me/messages/${messageId}`)
-                .expand('attachments')
+                .expand(`singleValueExtendedProperties($filter=id eq '${config.CUSTOM_HEADERS.OUTLOOK}')`)
+                .select('*,internetMessageHeaders')
                 .get();
 
             return this.parseOutlookMessage(message, folder);
@@ -565,7 +566,9 @@ export class OutlookProvider extends BaseEmailProvider {
             folder: folder || 'inbox',
             provider: 'outlook',
             inReplyTo: null, // Not directly available in Graph API
-            references: [] // Not directly available in Graph API
+            references: [], // Not directly available in Graph API
+            ignoreMessage: message?.singleValueExtendedProperties?.find(prop => prop.id === config.CUSTOM_HEADERS.OUTLOOK)?.value === "true",
+            internetMessageHeaders: message?.internetMessageHeaders?.find(header => header.name === config.CUSTOM_HEADERS.GOOGLE)?.value === "true",
         };
     }
 
@@ -796,8 +799,30 @@ export class OutlookProvider extends BaseEmailProvider {
             throw new Error('Not connected to Outlook');
         }
 
+        const toRecipient = options?.to?.map(addr => ({
+            emailAddress: {
+                address: addr?.address,
+                name: addr?.name || addr?.address
+            }
+        }));
+
         const replyMessage = {
-            comment: options.bodyText || options.bodyHtml || ''
+            comment: options.bodyHtml || options.bodyText  || '',
+            message: {
+                toRecipients: toRecipient,
+                singleValueExtendedProperties: [
+                    {
+                        "id": config.CUSTOM_HEADERS.OUTLOOK,
+                        "value": options.ignoreMessage.toString()
+                    }
+                ],
+                internetMessageHeaders: [
+                    {
+                        name: config.CUSTOM_HEADERS.GOOGLE,
+                        value: options.ignoreMessage.toString()
+                    }
+                ]
+            }
         };
 
         if (options.attachments?.length) {
@@ -1011,7 +1036,6 @@ export class OutlookProvider extends BaseEmailProvider {
         try {
             const subscriptionsResponse = await this.graphClient.api('/subscriptions').get();
             activeSubscriptions = subscriptionsResponse.value || [];
-            consoleHelper(`Found ${activeSubscriptions.length} active subscriptions in Microsoft Graph`);
         } catch (error) {
             consoleHelper('Error fetching subscriptions from Microsoft Graph:', error.message);
         }
@@ -1031,18 +1055,15 @@ export class OutlookProvider extends BaseEmailProvider {
             allSubscriptionIds.add(sub.id);
         });
 
-        consoleHelper(`Total unique subscriptions to delete: ${allSubscriptionIds.size}`);
 
         // Delete each subscription from Microsoft Graph
         for (const subscriptionId of allSubscriptionIds) {
             try {
                 await this.graphClient.api(`/subscriptions/${subscriptionId}`).delete();
                 deletedSubscriptions.push(subscriptionId);
-                consoleHelper(`✅ Deleted subscription: ${subscriptionId}`);
             } catch (error) {
                 const errorMsg = `Failed to delete subscription ${subscriptionId}: ${error.message}`;
                 errors.push(errorMsg);
-                consoleHelper(`❌ ${errorMsg}`);
             }
         }
 
@@ -1051,7 +1072,6 @@ export class OutlookProvider extends BaseEmailProvider {
             { _id: accountId },
             { $set: { 'metadata.subscriptions': [] } }
         );
-        consoleHelper(`✅ Cleared all subscriptions from database`);
 
         return {
             success: true,

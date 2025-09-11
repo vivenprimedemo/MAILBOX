@@ -1,10 +1,9 @@
+import { consoleHelper } from '../../consoleHelper.js';
+import { provider_config_map } from '../config/index.js';
+import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
-import { Email, EmailConfig } from '../models/Email.js';
-import { AuthService } from './AuthService.js';
-import { consoleHelper } from '../../consoleHelper.js';
-import { provider_config_map } from '../config/index.js';
 
 export class EmailService {
     providers = new Map();

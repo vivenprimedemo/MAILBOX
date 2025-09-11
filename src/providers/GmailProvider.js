@@ -403,10 +403,6 @@ export class GmailProvider extends BaseEmailProvider {
         }
     }
 
-
-
-
-
     sortEmails(emails, sortBy, sortOrder) {
         return emails.sort((a, b) => {
             let aVal, bVal;
@@ -454,7 +450,7 @@ export class GmailProvider extends BaseEmailProvider {
 
     parseGmailMessage(message, folderId) {
         const headers = message.payload.headers;
-        const getHeader = (name) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
+        const getHeader = (name) => headers.find((h) => h?.name?.toLowerCase() === name?.toLowerCase())?.value;
 
         const bodyText = this.extractTextFromPayload(message.payload, 'text/plain');
         const bodyHtml = this.extractTextFromPayload(message.payload, 'text/html');
@@ -492,7 +488,7 @@ export class GmailProvider extends BaseEmailProvider {
             size: message.sizeEstimate || 0,
             isEncrypted: false,
             isSigned: false,
-            ignoreMessage: getHeader(config.CRM_IGNORE_HEADER) || false,
+            ignoreMessage: getHeader(config.CUSTOM_HEADERS.GOOGLE) || false,
         };
     }
 
@@ -804,8 +800,8 @@ export class GmailProvider extends BaseEmailProvider {
         }
 
         message += `Subject: ${request.subject}\r\n`;
-        
-        request.ignoreMessage && (message += `X-CRM-IGNORE: true\r\n`);
+
+        request?.ignoreMessage && (message += `${config.CUSTOM_HEADERS.GOOGLE}: ${request.ignoreMessage}\r\n`);
 
         if (request.inReplyTo) {
             message += `In-Reply-To: ${request.inReplyTo}\r\n`;
@@ -1025,9 +1021,7 @@ export class GmailProvider extends BaseEmailProvider {
         try {
             // Gmail doesn't have a direct subscription list API
             // Instead, we check the watch status from our EmailConfig metadata
-            consoleHelper("LIST SUBSCRIPTIONS ACCOUNT ID", accountId)
             const emailConfig = await EmailConfig.findOne({ _id: accountId });
-            consoleHelper("LIST SUBSCRIPTIONS GMAIL PROVIDER", emailConfig);
 
             if (!emailConfig || !emailConfig.metadata?.watch) {
                 return {

@@ -135,10 +135,6 @@ export class WebhookController {
 
     static async getGmailClient(emailConfig) {
         if (emailConfig.provider !== "gmail") {
-            consoleHelper(
-                "Gmail Webhook Error - Invalid provider",
-                emailConfig.provider
-            );
             return null;
         }
 
@@ -174,7 +170,6 @@ export class WebhookController {
             const decodedData = JSON.parse(
                 Buffer.from(message.data, "base64").toString("utf-8")
             );
-            consoleHelper("WEBHOOK: Gmail webhook received", decodedData);
 
             const { emailAddress, historyId } = decodedData;
             if (!emailAddress || !historyId) {
@@ -197,10 +192,6 @@ export class WebhookController {
 
             // If no stored historyId, perform full initial sync
             if (!lastHistoryId) {
-                consoleHelper(
-                    "WEBHOOK: No stored historyId, performing full initial sync for INBOX and SENT"
-                );
-
                 // Set current historyId as starting point
                 await EmailConfig.updateOne(
                     { email: emailAddress },
@@ -238,11 +229,6 @@ export class WebhookController {
             } catch (error) {
                 // Handle expired/invalid history ID (404 error)
                 if (error.code === 404 || error.status === 404) {
-                    consoleHelper(
-                        `WEBHOOK: History ID ${lastHistoryId} expired, resetting to current historyId`
-                    );
-
-                    // Reset to current historyId from webhook
                     await EmailConfig.updateOne(
                         { email: emailAddress },
                         {
@@ -282,10 +268,6 @@ export class WebhookController {
                 });
             });
 
-            consoleHelper(
-                `WEBHOOK: Processing ${filteredMessages.length} new messages in INBOX/SENT`
-            );
-
             // Process each new message
             for (const messageInfo of filteredMessages) {
                 try {
@@ -315,10 +297,7 @@ export class WebhookController {
                         );
                     }
                 } catch (msgError) {
-                    consoleHelper(
-                        `WEBHOOK: Error processing message ${messageInfo.id}:`,
-                        msgError.message
-                    );
+                    consoleHelper(`WEBHOOK: Error processing message ${messageInfo.id}:`, msgError.message);
                 }
             }
 
@@ -378,15 +357,6 @@ export class WebhookController {
                     const now = Date.now();
                     const existing = processedNotifications.get(notificationId);
                     if (existing && now - existing < 5 * 60 * 1000) {
-                        consoleHelper(
-                            "Skipping duplicate notification (already processed):",
-                            {
-                                notificationId: notificationId.substring(0, 50) + "...",
-                                timeSinceLastProcess: `${Math.round(
-                                    (now - existing) / 1000
-                                )}s ago`,
-                            }
-                        );
                         continue;
                     }
 
@@ -399,14 +369,6 @@ export class WebhookController {
                             processedNotifications.delete(id);
                         }
                     }
-
-                    consoleHelper("Processing notification:", {
-                        subscriptionId: notification.subscriptionId,
-                        changeType: notification.changeType,
-                        resource: notification.resource,
-                        resourceData: notification.resourceData?.id,
-                        notificationId,
-                    });
 
                     // Extract message ID from the notification
                     if (messageId) {
@@ -442,8 +404,7 @@ export class WebhookController {
         try {
             const { resourceData, clientState } = notification;
             const messageId = resourceData?.id;
-            consoleHelper("Client State:", clientState);
-
+            
             if (messageId) {
                 try {
                     // Extract account ID from client state (format: outlook_accountId_timestamp)
@@ -473,30 +434,18 @@ export class WebhookController {
                             const isSystemEmail = isUndeliverable || isAutoReply;
 
                             if (isSystemEmail) {
-                                consoleHelper(
-                                    "⚠️  Email Type:",
-                                    isUndeliverable ? "UNDELIVERABLE NOTICE" : "SYSTEM EMAIL"
-                                );
+                                consoleHelper("⚠️  Email Type:", isUndeliverable ? "UNDELIVERABLE NOTICE" : "SYSTEM EMAIL");
                             }
 
                             // Only log full email object if debug mode is enabled
                             if (process.env.DEBUG_WEBHOOKS === "true") {
-                                consoleHelper(
-                                    "🐛 Full Email Object (DEBUG):",
-                                    JSON.stringify(fullEmail, null, 2)
-                                );
+                                consoleHelper("🐛 Full Email Object (DEBUG):", JSON.stringify(fullEmail, null, 2));
                             }
                         } else {
-                            consoleHelper(
-                                "❌ Could not fetch email content for message ID:",
-                                messageId
-                            );
+                            consoleHelper("❌ Could not fetch email content for message ID:", messageId);
                         }
                     } else {
-                        consoleHelper(
-                            "Could not extract account ID from client state:",
-                            clientState
-                        );
+                        consoleHelper("Could not extract account ID from client state:", clientState);
                     }
                 } catch (emailError) {
                     consoleHelper("Error fetching full email:", emailError.message);
@@ -505,10 +454,7 @@ export class WebhookController {
 
             return { success: true };
         } catch (error) {
-            consoleHelper("Error processing Outlook notification", {
-                error: error.message,
-                notification,
-            });
+            consoleHelper("Error processing Outlook notification", error.message);
             throw error;
         }
     }

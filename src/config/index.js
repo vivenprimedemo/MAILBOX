@@ -76,7 +76,10 @@ export const config = {
     },
 
     // IGNORE HEADERS - custom header name to identify and ignore specific email messages
-    CRM_IGNORE_HEADER: 'X-CRM-IGNORE',
+    CUSTOM_HEADERS: {
+        GOOGLE: 'X-CRM-IGNORE',
+        OUTLOOK: `String {a2b93407-9b8e-4011-bcbb-c44f50c1a915} Name X-CRM-IGNORE`,
+    },
 };
 
 export const provider_config_map = {

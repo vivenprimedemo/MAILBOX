@@ -164,6 +164,12 @@ export const schemas = {
     replyEmail: Joi.object({
         bodyText: Joi.string().optional(),
         bodyHtml: Joi.string().optional(),
+        to: Joi.array().items(
+            Joi.object({
+                name: Joi.string().optional(),
+                address: Joi.string().email().required()
+            })
+        ).optional(),
         cc: Joi.array().items(
             Joi.object({
                 name: Joi.string().optional(),

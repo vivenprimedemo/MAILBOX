@@ -74,7 +74,14 @@ export const emailProcesses = {
         }
     },
 
+
     async handleIsEmailNeverLogged(payloadToken, emailMessage, emailConfigId) {
+
+        const ignoreVal = emailMessage?.ignoreMessage
+        if(ignoreVal === true || ignoreVal === "true") {
+            return true;
+        }
+
         const to = emailMessage?.to?.[0]?.address || "";
         const from = emailMessage?.from?.address || "";
 
