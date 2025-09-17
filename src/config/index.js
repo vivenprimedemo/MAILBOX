@@ -14,7 +14,9 @@ const outlook_scopes = [
     'offline_access',
     'openid',
     'profile',
-    'https://graph.microsoft.com/User.Read'
+    'https://graph.microsoft.com/User.Read',
+    'https://graph.microsoft.com/Calendars.ReadWrite.Shared',
+    'https://graph.microsoft.com/Calendars.ReadWrite',
 ];
 
 const SCOPE_MAP = {
