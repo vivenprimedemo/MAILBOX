@@ -42,7 +42,7 @@ class EmailClientServer {
         this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
         // Request sanitization
-        this.app.use(sanitizeRequest);
+        // this.app.use(sanitizeRequest);
 
         // Request logging
         this.app.use((req, res, next) => {
