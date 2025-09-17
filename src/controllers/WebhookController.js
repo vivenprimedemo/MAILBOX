@@ -14,7 +14,9 @@ const deduplicationManager = new DeduplicationManager();
 export class WebhookController {
 
     static async processEmailMessage(emailMessage, emailConfig, provider) {
+        consoleHelper("processEmailMessage", { emailMessage, emailConfig, provider });
         const accessToken = await payloadService.generateAdminToken();
+        consoleHelper("accessToken", accessToken);
         try {
             let emailConfigId;
             if (!emailMessage) {
@@ -88,6 +90,8 @@ export class WebhookController {
             emailConfigId
         });
 
+        consoleHelper("shouldSkipEmail", isNeverLogged);
+
         if (isNeverLogged) {
             consoleHelper('Email is Blocked');
             return true;
@@ -96,6 +100,7 @@ export class WebhookController {
     }
 
     static async processEmailAndCreateActivity(accessToken, emailMessage, emailConfig, direction) {
+        consoleHelper("processEmailAndCreateActivity", { accessToken, emailMessage, emailConfig, direction });
         // Create contacts
         const [contactFrom, contactTo] = await Promise.all([
             emailProcesses.handleCreateContact({
@@ -348,6 +353,7 @@ export class WebhookController {
             });
         } catch (error) {
             consoleHelper("WEBHOOK: Gmail processing error:", error.message);
+            console.log(error);
             return res.status(500).json({
                 success: false,
                 error: error.message,

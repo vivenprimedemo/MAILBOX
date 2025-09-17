@@ -34,6 +34,7 @@ export class GmailProvider extends BaseEmailProvider {
             await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/profile');
             this.isConnected = true;
         } catch (error) {
+            consoleHelper("ATTEMPT REFRESH GMAIL ACCESS TOKEN FOR " + this?.config?.email, error);
             if (this.refreshToken) {
                 await this.refreshAccessToken();
                 this.isConnected = true;
