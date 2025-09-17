@@ -6,10 +6,10 @@ import { provider_config_map } from "../config/index.js";
 import { logger } from "../config/logger.js";
 import { payloadService } from "../services/payload.js";
 import { emailProcesses } from "./EmailProcesses.js";
+import { DeduplicationManager } from "../helpers/DeduplicationManager.js";
 
-// In-memory cache for deduplication
-const processedNotifications = new Map();
-const processedGmailMessages = new Map();
+// Singleton instance for deduplication
+const deduplicationManager = new DeduplicationManager();
 
 export class WebhookController {
 
@@ -21,51 +21,41 @@ export class WebhookController {
                 logger.warn('Email message is null or undefined');
                 return;
             }
-
-            // Create unique processing key for this specific email
             const emailProcessingKey = `${provider}_${emailMessage.id || emailMessage.messageId}_${emailConfigId || emailConfig?._id}`;
-            const now = Date.now();
 
-            // Check if this email was already processed recently (last 5 minutes)
-            const existingProcess = processedNotifications.get(emailProcessingKey);
-            if (existingProcess && now - existingProcess < 5 * 60 * 1000) {
+            // Check for duplicate processing
+            if (deduplicationManager.isProcessed(emailProcessingKey)) {
                 logger.info('Skipping duplicate email processing', {
                     messageId: emailMessage.id || emailMessage.messageId,
-                    provider,
-                    timeSinceLastProcess: `${Math.round((now - existingProcess) / 1000)}s ago`
+                    provider
                 });
                 return;
             }
 
             // Mark as being processed
-            processedNotifications.set(emailProcessingKey, now);
+            deduplicationManager.markProcessed(emailProcessingKey);
 
-            let direction;
-            // Determine if email is sent or received
-            if (provider === 'outlook') {
-                emailConfigId = emailConfig?.clientState?.split('_')[1];
-                const type = emailConfig?.clientState?.split('_')[2];
-                direction = type === 'outgoing' ? 'SENT' : 'RECEIVED';
-            } else {
-                emailConfigId = emailConfig?._id;
-                const isSentEmail = WebhookController.isEmailSent(emailMessage, emailConfig);
-                direction = isSentEmail ? 'SENT' : 'RECEIVED';
-            }
+            // Determine email direction and configuration ID
+            const { direction, configId } = WebhookController.determineEmailDirection(
+                emailMessage,
+                emailConfig,
+                provider
+            );
+            emailConfigId = configId;
+            emailConfig.direction = direction;
 
-            // Log email processing information
-            process.env.NODE_ENV === 'development' && logger.info('Processing email message');
-            process.env.NODE_ENV === 'development' && console.log({...emailMessage, direction, emailConfig})
-
-            const isneverLogged = await emailProcesses.handleIsEmailNeverLogged(accessToken, emailMessage, emailConfigId);
-            if (isneverLogged) {
-                consoleHelper('Email is Blocked');
+            // Check if email should be processed
+            if (await WebhookController.shouldSkipEmail(accessToken, emailMessage, emailConfigId)) {
                 return;
             }
 
-            const contactFrom = await emailProcesses.handleCreateContact(accessToken, emailMessage?.from?.address, emailMessage?.from?.name);
-            const contactTo = await emailProcesses.handleCreateContact(accessToken, emailMessage?.to?.[0]?.address, emailMessage?.to?.[0]?.name);
-            // const associatedDeals = await emailProcesses.handleFetchAssociatedDeals(accessToken, contactFrom?.id, contactTo?.id);
-            const activity = await emailProcesses.handleCreateActivity(accessToken, emailMessage, [contactFrom, contactTo], direction, emailConfigId);
+            // Process email and create activity
+            await WebhookController.processEmailAndCreateActivity(
+                accessToken,
+                emailMessage,
+                emailConfig,
+                direction
+            );
 
         } catch (error) {
             logger.error('Error processing email message', {
@@ -75,6 +65,65 @@ export class WebhookController {
                 accountId: emailConfig?._id
             });
         }
+    }
+
+    static determineEmailDirection(emailMessage, emailConfig, provider) {
+        if (provider === 'outlook') {
+            const configId = emailConfig?.clientState?.split('_')[1];
+            const type = emailConfig?.clientState?.split('_')[2];
+            const direction = type === 'outgoing' ? 'SENT' : 'RECEIVED';
+            return { direction, configId };
+        } else {
+            const configId = emailConfig?._id;
+            const isSentEmail = WebhookController.isEmailSent(emailMessage, emailConfig);
+            const direction = isSentEmail ? 'SENT' : 'RECEIVED';
+            return { direction, configId };
+        }
+    }
+
+    static async shouldSkipEmail(accessToken, emailMessage, emailConfigId) {
+        const isNeverLogged = await emailProcesses.handleIsEmailNeverLogged({
+            payloadToken: accessToken,
+            emailMessage,
+            emailConfigId
+        });
+
+        if (isNeverLogged) {
+            consoleHelper('Email is Blocked');
+            return true;
+        }
+        return false;
+    }
+
+    static async processEmailAndCreateActivity(accessToken, emailMessage, emailConfig, direction) {
+        // Create contacts
+        const [contactFrom, contactTo] = await Promise.all([
+            emailProcesses.handleCreateContact({
+                payloadToken: accessToken,
+                contactEmailAddress: emailMessage?.from?.address,
+                contactName: emailMessage?.from?.name,
+                emailMessage,
+                emailConfig,
+            }),
+            emailProcesses.handleCreateContact({
+                payloadToken: accessToken,
+                contactEmailAddress: emailMessage?.to?.[0]?.address,
+                contactName: emailMessage?.to?.[0]?.name,
+                emailMessage,
+                emailConfig,
+            })
+        ]);
+
+        // Create activity
+        const createdActivity = await emailProcesses.handleCreateActivity({
+            payloadToken: accessToken,
+            emailMessage,
+            associatedContacts: [contactFrom, contactTo],
+            direction,
+            emailConfig
+        });
+
+        consoleHelper("Activity Created", createdActivity);
     }
 
     static isEmailSent(emailMessage, emailConfig) {
@@ -179,9 +228,9 @@ export class WebhookController {
                 });
             }
 
-            // Find email configuration
-            const emailConfig = await EmailConfig.findOne({ email: emailAddress });
-            if (!emailConfig || emailConfig.provider !== "gmail") {
+            // Find and validate email configuration
+            const emailConfig = await WebhookController.findAndValidateEmailConfig(emailAddress, 'gmail');
+            if (!emailConfig) {
                 return res.status(404).json({
                     success: false,
                     error: "Email config not found or invalid provider",
@@ -269,37 +318,12 @@ export class WebhookController {
             });
 
             // Process each new message
-            for (const messageInfo of filteredMessages) {
-                try {
-                    // Check for duplicates using messageId, historyId, and email address
-                    if (WebhookController.isGmailMessageProcessed(
-                        messageInfo.id,
-                        historyId,
-                        emailAddress
-                    )) {
-                        continue; // Skip this duplicate message
-                    }
-
-                    const emailService = EmailController.emailService;
-                    const fullEmail = await emailService.getEmail(
-                        emailConfig?._id,
-                        messageInfo.id,
-                        null, // folder not needed for direct message ID lookup
-                        null // userId not needed for this operation
-                    );
-
-                    // Process the email message
-                    if (fullEmail) {
-                        await WebhookController.processEmailMessage(
-                            fullEmail,
-                            emailConfig,
-                            "gmail"
-                        );
-                    }
-                } catch (msgError) {
-                    consoleHelper(`WEBHOOK: Error processing message ${messageInfo.id}:`, msgError.message);
-                }
-            }
+            await WebhookController.processGmailMessages(
+                filteredMessages,
+                historyId,
+                emailAddress,
+                emailConfig
+            );
 
             // Update historyId only after successful processing of all events
             if (historyResponse.data.historyId) {
@@ -332,6 +356,52 @@ export class WebhookController {
         }
     }
 
+    static async findAndValidateEmailConfig(emailAddress, provider) {
+        const emailConfig = await EmailConfig.findOne({ email: emailAddress });
+        if (!emailConfig || emailConfig.provider !== provider) {
+            return null;
+        }
+        return emailConfig;
+    }
+
+    static async processGmailMessages(messages, historyId, emailAddress, emailConfig) {
+        for (const messageInfo of messages) {
+            try {
+                // Check for duplicates
+                if (deduplicationManager.isGmailMessageProcessed(
+                    messageInfo.id,
+                    historyId,
+                    emailAddress
+                )) {
+                    continue;
+                }
+
+                // Fetch and process email
+                const emailService = EmailController.emailService;
+                const fullEmail = await emailService.getEmail(
+                    emailConfig?._id,
+                    messageInfo.id,
+                    null,
+                    null
+                );
+
+                if (fullEmail) {
+                    await WebhookController.processEmailMessage(
+                        fullEmail,
+                        emailConfig,
+                        "gmail"
+                    );
+                }
+            } catch (msgError) {
+                logger.error(`WEBHOOK: Error processing Gmail message ${messageInfo.id}`, {
+                    error: msgError.message,
+                    messageId: messageInfo.id,
+                    emailAddress
+                });
+            }
+        }
+    }
+
     static async handleOutlookWebhook(req, res) {
         try {
             // Microsoft Graph sends validation token for webhook verification
@@ -343,45 +413,7 @@ export class WebhookController {
             const notifications = req.body.value || [];
 
             // Process each notification
-            for (const notification of notifications) {
-                try {
-                    const messageId = notification.resourceData?.id;
-                    const changeType = notification.changeType;
-                    const subscriptionId = notification.subscriptionId;
-
-                    // Create unique notification ID for deduplication
-                    const etag = notification.resourceData?.["@odata.etag"];
-                    const notificationId = `${subscriptionId}_${messageId}_${changeType}_${etag}`;
-
-                    // Check if we already processed this notification recently (last 5 minutes)
-                    const now = Date.now();
-                    const existing = processedNotifications.get(notificationId);
-                    if (existing && now - existing < 5 * 60 * 1000) {
-                        continue;
-                    }
-
-                    // Mark as processed
-                    processedNotifications.set(notificationId, now);
-
-                    // Clean up old entries (older than 10 minutes)
-                    for (const [id, timestamp] of processedNotifications.entries()) {
-                        if (now - timestamp > 10 * 60 * 1000) {
-                            processedNotifications.delete(id);
-                        }
-                    }
-
-                    // Extract message ID from the notification
-                    if (messageId) {
-                        // Fetch full email details and process notification
-                        await WebhookController.processOutlookNotification(notification);
-                    }
-                } catch (error) {
-                    consoleHelper("Failed to process notification", {
-                        error: error.message,
-                        notification: notification,
-                    });
-                }
-            }
+            await WebhookController.processOutlookNotifications(notifications);
 
             res.status(200).json({ success: true });
         } catch (error) {
@@ -397,6 +429,38 @@ export class WebhookController {
                     timestamp: new Date(),
                 },
             });
+        }
+    }
+
+    static async processOutlookNotifications(notifications) {
+        for (const notification of notifications) {
+            try {
+                const messageId = notification.resourceData?.id;
+                const changeType = notification.changeType;
+                const subscriptionId = notification.subscriptionId;
+
+                // Create unique notification ID for deduplication
+                const etag = notification.resourceData?.["@odata.etag"];
+                const notificationId = `${subscriptionId}_${messageId}_${changeType}_${etag}`;
+
+                // Check for duplicates
+                if (deduplicationManager.isProcessed(notificationId)) {
+                    continue;
+                }
+
+                // Mark as processed
+                deduplicationManager.markProcessed(notificationId);
+
+                // Process notification if valid
+                if (messageId) {
+                    await WebhookController.processOutlookNotification(notification);
+                }
+            } catch (error) {
+                logger.error("Failed to process Outlook notification", {
+                    error: error.message,
+                    notification: notification,
+                });
+            }
         }
     }
 
@@ -424,23 +488,8 @@ export class WebhookController {
 
                             await WebhookController.processEmailMessage(fullEmail, { clientState }, 'outlook');
 
-                            // Determine if this looks like a special email type
-                            const isUndeliverable = fullEmail.subject
-                                ?.toLowerCase()
-                                .includes("undeliverable");
-                            const isAutoReply =
-                                fullEmail.from?.address?.includes("noreply") ||
-                                fullEmail.from?.address?.includes("MicrosoftExchange");
-                            const isSystemEmail = isUndeliverable || isAutoReply;
-
-                            if (isSystemEmail) {
-                                consoleHelper("⚠️  Email Type:", isUndeliverable ? "UNDELIVERABLE NOTICE" : "SYSTEM EMAIL");
-                            }
-
-                            // Only log full email object if debug mode is enabled
-                            if (process.env.DEBUG_WEBHOOKS === "true") {
-                                consoleHelper("🐛 Full Email Object (DEBUG):", JSON.stringify(fullEmail, null, 2));
-                            }
+                            // Log special email types and debug info
+                            WebhookController.logEmailTypeInfo(fullEmail);
                         } else {
                             consoleHelper("❌ Could not fetch email content for message ID:", messageId);
                         }
@@ -459,47 +508,26 @@ export class WebhookController {
         }
     }
 
-    static async handleCreateContact(emailAddress) {
-        try {
-            const contact = {
-                email: emailAddress,
-                name: emailAddress,
-                type: "contact",
-            };
-            const response = await payloadService.create(accessToken, "contacts", contact);
-            return response;
-        } catch (error) {
-            console.error("Error creating contact:", error);
-            throw error;
-        }
-    }
+    static logEmailTypeInfo(fullEmail) {
+        const isUndeliverable = fullEmail.subject
+            ?.toLowerCase()
+            .includes("undeliverable");
+        const isAutoReply =
+            fullEmail.from?.address?.includes("noreply") ||
+            fullEmail.from?.address?.includes("MicrosoftExchange");
+        const isSystemEmail = isUndeliverable || isAutoReply;
 
-    static isGmailMessageProcessed(messageId, historyId, emailAddress) {
-        const gmailMessageKey = `${emailAddress}_${messageId}_${historyId}`;
-        const now = Date.now();
-        const existing = processedGmailMessages.get(gmailMessageKey);
-
-        // Check if message was processed in last 10 minutes
-        if (existing && now - existing < 10 * 60 * 1000) {
-            logger.info('Skipping duplicate Gmail message', {
-                messageId,
-                historyId,
-                emailAddress: emailAddress.substring(0, 20) + '...',
-                timeSinceLastProcess: `${Math.round((now - existing) / 1000)}s ago`
+        if (isSystemEmail) {
+            logger.info("Special email type detected", {
+                type: isUndeliverable ? "UNDELIVERABLE NOTICE" : "SYSTEM EMAIL",
+                subject: fullEmail.subject,
+                from: fullEmail.from?.address
             });
-            return true;
         }
 
-        // Mark as processed
-        processedGmailMessages.set(gmailMessageKey, now);
-
-        // Clean up old entries (older than 15 minutes)
-        for (const [key, timestamp] of processedGmailMessages.entries()) {
-            if (now - timestamp > 15 * 60 * 1000) {
-                processedGmailMessages.delete(key);
-            }
+        // Debug logging
+        if (process.env.DEBUG_WEBHOOKS === "true") {
+            logger.debug("Full Email Object (DEBUG)", { email: fullEmail });
         }
-        return false;
     }
-
 }
