@@ -862,6 +862,56 @@ export class GmailProvider extends BaseEmailProvider {
         return message;
     }
 
+    async buildMimeMessageV2(request) {
+        // Fallback "from" if not provided in request/config
+        const fromEmail = request.from || "me";
+
+        // Create a transport that doesn’t send mail, just builds it
+        const transporter = nodemailer.createTransport({
+            streamTransport: true,
+            buffer: true,
+        });
+
+        // Build message options
+        const mailOptions = {
+            from: fromEmail,
+            to: request.to?.map(addr =>
+                addr.name ? `"${addr.name}" <${addr.address}>` : addr.address
+            ),
+            cc: request.cc?.map(addr =>
+                addr.name ? `"${addr.name}" <${addr.address}>` : addr.address
+            ),
+            bcc: request.bcc?.map(addr =>
+                addr.name ? `"${addr.name}" <${addr.address}>` : addr.address
+            ),
+            subject: request.subject,
+            text: request.bodyText,
+            html: request.bodyHtml,
+            headers: {}, // add custom headers here
+            attachments: request.attachments?.map(att => ({
+                filename: att.filename,
+                content: att.content,
+                contentType: att.contentType || "application/octet-stream",
+                encoding: Buffer.isBuffer(att.content) ? undefined : "base64",
+            })),
+        };
+
+        // Custom headers
+        if (request.ignoreMessage) {
+            mailOptions.headers[config.CUSTOM_HEADERS.CRM_IGNORE] = request.ignoreMessage;
+        }
+        if (request.inReplyTo) {
+            mailOptions.inReplyTo = request.inReplyTo;
+        }
+        if (request.references?.length) {
+            mailOptions.references = request.references;
+        }
+
+        const { message } = await transporter.sendMail(mailOptions);
+
+        return message.toString();
+    }
+
     async replyToEmail(originalMessageId, options) {
         try {
             const originalEmail = await this.getEmail(originalMessageId);
