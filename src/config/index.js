@@ -17,6 +17,47 @@ const outlook_scopes = [
     'https://graph.microsoft.com/User.Read'
 ];
 
+const SCOPE_MAP = {
+    google: {
+        gmail: [
+            'https://mail.google.com/',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
+        ],
+        calendar: [
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/calendar.events'
+        ],
+    },
+    microsoft: {
+        outlook: [
+            'openid',
+            'profile',
+            'email',
+            'offline_access',
+            'https://graph.microsoft.com/User.Read',
+            'https://graph.microsoft.com/Mail.Read',
+            'https://graph.microsoft.com/Mail.Send',
+            'https://graph.microsoft.com/Mail.ReadWrite',
+            'https://graph.microsoft.com/MailboxSettings.Read',
+        ],
+        calendar: [
+            'openid',
+            'profile',
+            'email',
+            'offline_access',
+            'https://graph.microsoft.com/User.Read',
+            'https://graph.microsoft.com/Mail.Read',
+            'https://graph.microsoft.com/Mail.Send',
+            'https://graph.microsoft.com/Mail.ReadWrite',
+            'https://graph.microsoft.com/Calendars.ReadWrite',
+            'https://graph.microsoft.com/Calendars.ReadWrite.Shared',
+        ],
+    }
+};
+
 export const config = {
     // Server configuration
     PORT: parseInt(process.env.PORT || "3000"),
@@ -81,12 +122,18 @@ export const config = {
         ],
     },
 
+    SCOPE_MAP: SCOPE_MAP,
+
     // IGNORE HEADERS - custom header name to identify and ignore specific email messages
     CUSTOM_HEADERS: {
         GOOGLE: 'X-CRM-IGNORE',
         OUTLOOK: `String {a2b93407-9b8e-4011-bcbb-c44f50c1a915} Name X-CRM-IGNORE`,
         CRM_IGNORE: 'X-CRM-IGNORE',
     },
+
+    OAUTH_STATE_SECRET: 'super secret token for oauth state',
+    OAUTH_STATE_EXPIRES_IN: '10m',
+    OAUTH_REDIRECT_URI: 'http://localhost:8081/api/oauth/callback',
 };
 
 export const provider_config_map = {
