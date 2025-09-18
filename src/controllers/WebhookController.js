@@ -491,8 +491,12 @@ export class WebhookController {
                         );
 
                         if (fullEmail) {
+                            const emailConfig = await EmailConfig.findOne({ _id: accountId });
+                            if(!emailConfig){
+                                throw new Error("❌ Could not find email config for account ID:", accountId);
+                            }
 
-                            await WebhookController.processEmailMessage(fullEmail, { clientState }, 'outlook');
+                            await WebhookController.processEmailMessage(fullEmail, { clientState , ...emailConfig }, 'outlook');
 
                             // Log special email types and debug info
                             WebhookController.logEmailTypeInfo(fullEmail);
