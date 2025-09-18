@@ -491,7 +491,8 @@ export class WebhookController {
                         );
 
                         if (fullEmail) {
-                            const emailConfig = await EmailConfig.findOne({ _id: accountId });
+                            const emailConfig = await EmailConfig.findOne({ _id: accountId }).lean();
+                            
                             if(!emailConfig){
                                 throw new Error("❌ Could not find email config for account ID:", accountId);
                             }
