@@ -239,8 +239,11 @@ export const emailProcesses = {
             performed_by: "66c5775a4cf9070e0378389d", // support's userId
             company_id: emailConfig?.company_id,
             entity_type: "contacts",
+            entity: {
+                contact: associatedContact?.id
+            },
             association: {
-                contacts: associatedContact?.id,
+                contacts: [associatedContact?.id],
             },
             module: {
                 name: "emails"
