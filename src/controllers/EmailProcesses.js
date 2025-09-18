@@ -240,7 +240,7 @@ export const emailProcesses = {
             company_id: emailConfig?.company_id,
             entity_type: "contacts",
             entity: {
-                contact: associatedContact?.id
+                contacts: associatedContact?.id
             },
             association: {
                 contacts: [associatedContact?.id],
