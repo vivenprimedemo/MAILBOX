@@ -3,6 +3,7 @@ import { payloadService } from "../services/payload.js";
 import { EmailConfig } from "../models/Email.js";
 import { config } from "../config/index.js";
 import { logger } from "../config/logger.js";
+import constant from "../utils/constants.js";
 
 export const emailProcesses = {
 
@@ -59,7 +60,7 @@ export const emailProcesses = {
             const activityPayload = {
                 name: `Email Activity`,
                 event: "interaction",
-                key: `email_${direction}_${emailMessage?.id || emailMessage?.messageId}`,
+                key: direction === "RECEIVED" ? constant.activity.received : constant.activity.sent,
                 performed_by: "66c5775a4cf9070e0378389d", // support's userId
                 entity_type: "contacts",
                 association: {
