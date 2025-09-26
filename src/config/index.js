@@ -7,7 +7,7 @@ const outlook_scopes = [
     'https://graph.microsoft.com/MailboxFolder.Read',
     'offline_access',
     'https://graph.microsoft.com/User.Read',
-    // 'https://graph.microsoft.com/Calendars.ReadWrite',
+    'https://graph.microsoft.com/Calendars.ReadWrite',
 ];
 
 const SCOPE_MAP = {
