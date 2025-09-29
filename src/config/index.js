@@ -2,54 +2,21 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const outlook_scopes = [
+    'offline_access',
+    'https://graph.microsoft.com/User.Read',
     'https://graph.microsoft.com/Mail.Send',
     'https://graph.microsoft.com/Mail.ReadWrite',
     'https://graph.microsoft.com/MailboxFolder.Read',
-    'offline_access',
-    'https://graph.microsoft.com/User.Read',
-    'https://graph.microsoft.com/Calendars.ReadWrite',
+    'https://graph.microsoft.com/Calendars.Read',
 ];
 
-const SCOPE_MAP = {
-    google: {
-        gmail: [
-            'https://mail.google.com/',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/userinfo.email',
-        ],
-        calendar: [
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/calendar',
-            'https://www.googleapis.com/auth/calendar.events'
-        ],
-    },
-    microsoft: {
-        outlook: [
-            'openid',
-            'profile',
-            'email',
-            'offline_access',
-            'https://graph.microsoft.com/User.Read',
-            'https://graph.microsoft.com/Mail.Read',
-            'https://graph.microsoft.com/Mail.Send',
-            'https://graph.microsoft.com/Mail.ReadWrite',
-            'https://graph.microsoft.com/MailboxSettings.Read',
-        ],
-        calendar: [
-            'openid',
-            'profile',
-            'email',
-            'offline_access',
-            'https://graph.microsoft.com/User.Read',
-            'https://graph.microsoft.com/Mail.Read',
-            'https://graph.microsoft.com/Mail.Send',
-            'https://graph.microsoft.com/Mail.ReadWrite',
-            'https://graph.microsoft.com/Calendars.ReadWrite',
-            'https://graph.microsoft.com/Calendars.ReadWrite.Shared',
-        ],
-    }
-};
+const gmail_scopes = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.events'
+]
 
 export const config = {
     // Server configuration
@@ -106,16 +73,8 @@ export const config = {
     // OUTLOOK SCOPES
     SCOPES: {
         outlook: outlook_scopes,
-        gmail: [
-            'https://www.googleapis.com/auth/gmail.readonly',
-            'https://www.googleapis.com/auth/gmail.send',
-            'https://www.googleapis.com/auth/gmail.modify',
-            'https://www.googleapis.com/auth/calendar',
-            'https://www.googleapis.com/auth/calendar.events'
-        ],
+        gmail: gmail_scopes,
     },
-
-    SCOPE_MAP: SCOPE_MAP,
 
     // IGNORE HEADERS - custom header name to identify and ignore specific email messages
     CUSTOM_HEADERS: {
