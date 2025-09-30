@@ -581,6 +581,7 @@ export class OutlookProvider extends BaseEmailProvider {
             inReplyTo: null, // Not directly available in Graph API
             references: [], // Not directly available in Graph API
             ignoreMessage: ignoreMessage,
+            snippet: message?.bodyPreview,
         };
     }
 
