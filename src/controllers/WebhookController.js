@@ -14,9 +14,7 @@ const deduplicationManager = new DeduplicationManager();
 export class WebhookController {
 
     static async processEmailMessage(emailMessage, emailConfig, provider) {
-        consoleHelper("processEmailMessage", { emailMessage, emailConfig, provider });
         const accessToken = await payloadService.generateAdminToken();
-        consoleHelper("accessToken", accessToken);
         try {
             let emailConfigId;
             if (!emailMessage) {
@@ -100,7 +98,6 @@ export class WebhookController {
     }
 
     static async processEmailAndCreateActivity(accessToken, emailMessage, emailConfig, direction) {
-        consoleHelper("processEmailAndCreateActivity", { accessToken, emailMessage, emailConfig, direction });
         // Create contacts
         const [contactFrom, contactTo] = await Promise.all([
             emailProcesses.handleCreateContact({
@@ -119,16 +116,36 @@ export class WebhookController {
             })
         ]);
 
+        // Create ticket
+        const createdTicket = await emailProcesses.handleCreateTicket({
+            payloadToken: accessToken,
+            emailMessage,
+            associatedContact: contactFrom,
+            direction,
+            emailConfig
+        });
+
         // Create activity
         const createdActivity = await emailProcesses.handleCreateActivity({
             payloadToken: accessToken,
             emailMessage,
             associatedContacts: [contactFrom, contactTo],
+            associatedTickets: createdTicket ? [createdTicket] : [],
             direction,
             emailConfig
         });
 
-        consoleHelper("Activity Created", createdActivity);
+        console.log("\n\n-----------| Email Processing Completed |-----------\n")
+        console.table({
+            createdActivityId: createdActivity?.itemId,
+            createdTicketId: createdTicket?.id,
+            createdContactFromId: contactFrom?.id,
+            createdContactToId: contactTo?.id,
+            direction,
+            emailConfigId: emailConfig?._id || emailConfig?.id,
+            emailSubject: emailMessage?.subject,
+        });
+        
     }
 
     static isEmailSent(emailMessage, emailConfig) {

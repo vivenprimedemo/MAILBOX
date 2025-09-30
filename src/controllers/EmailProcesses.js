@@ -32,7 +32,6 @@ export const emailProcesses = {
 
             const response = await payloadService.create(payloadToken, "contacts", contactPayload);
             const createdContact = response?.data?.doc;
-            consoleHelper("contact create res", response)
 
             //  create contact creation activity
             emailProcesses.handleContactCreationActivity({
@@ -53,6 +52,7 @@ export const emailProcesses = {
         payloadToken,
         emailMessage,
         associatedContacts,
+        associatedTickets,
         direction,
         emailConfig,
     }) {
@@ -65,7 +65,7 @@ export const emailProcesses = {
                 entity_type: "contacts",
                 association: {
                     contacts: associatedContacts?.map(contact => contact?.id),
-                    // deals: deals?.map(deal => deal?.id),
+                    tickets: associatedTickets?.length > 0 ? associatedTickets?.map(ticket => ticket?.id) : [],
                 },
                 module: {
                     name: "emails"
@@ -265,5 +265,182 @@ export const emailProcesses = {
         const res = await payloadService.create(payloadToken, "activity_logs", activityPayload);
         consoleHelper("contact created activity", res)
         return res;
-    }
+    },
+
+    async handleCreateTicket({
+        payloadToken,
+        associatedContact,
+        emailMessage,
+        emailConfig,
+        direction
+    }) {
+        try {
+
+            if(direction !== "RECEIVED"){
+                consoleHelper("Skipped Ticket creation as direction is not received | direction : ", direction)
+                return null;
+            }
+
+            // Get config/defaults for the ticket
+            const ticketConfig = await payloadService.find(payloadToken, 'ticket_configs', {
+                queryParams: [
+                    `where[is_active][equals]=true`,
+                    `where[company_id][equals]=${emailConfig?.company_id}`,
+                    `where[channel_id][equals]=${emailConfig?._id || emailConfig?.id}`
+                ],
+                depth: 0,
+                returnSingle: true
+            })
+
+            if (!ticketConfig) {
+                return null;
+            }
+
+            // Create ticket
+            const ticketPayload = {
+                title: emailMessage?.subject || 'No Subject',
+                description: emailMessage?.snippet || emailMessage?.bodyText || emailMessage?.bodyHtml || '',
+                crm_tenant: [emailConfig?.company_id],
+                pipeline_id: ticketConfig?.pipeline_id,
+                stage_id: ticketConfig?.stage_id,
+                priority: ticketConfig?.priority,
+                assigned_to: ticketConfig?.assigned_to?.[0],
+                source: 'email',
+                direction: direction || 'inbound',
+            }
+
+            const createdTicketRes = await payloadService.create(payloadToken, "tickets", ticketPayload);
+
+            // Create ticket activity
+            const ticketCreateActivity = await emailProcesses.handleCreateTicketActivityLog({
+                payloadToken,
+                ticket: createdTicketRes?.data?.doc,
+                contact: associatedContact,
+                companyId: emailConfig?.company_id,
+                userId: emailConfig?.support_user_id || "66c5775a4cf9070e0378389d", // support's userId
+            })
+
+            if (!ticketCreateActivity) {
+                consoleHelper("Warning: Ticket activity log creation failed for ticket", createdTicketRes?.data?.doc?.id)
+            }
+
+            // Create ticket associations
+            const ticketAssociationRes = await emailProcesses.handleCreateTicketAssociations({
+                payloadToken,
+                ticketId: createdTicketRes?.data?.doc?.id,
+                contactId: associatedContact?.id,
+                companyId: emailConfig?.company_id,
+                userId: emailConfig?.support_user_id || "66c5775a4cf9070e0378389d", // support's userId
+            })
+
+            if (!ticketAssociationRes) {
+                consoleHelper("Warning: Ticket association creation failed for ticket", createdTicketRes?.data?.doc?.id)
+            }
+
+            return createdTicketRes?.data?.doc;
+            
+        } catch (error) {
+            console.error("Error handleCreateTicket:", error)
+            return null;
+        }
+    },
+
+    async handleCreateTicketActivityLog({
+        payloadToken,
+        ticket,
+        contact,
+        companyId,
+        userId,
+    }) {
+        try {
+            const activityLogData = {
+                name: 'Ticket Created by Email',
+                event: constant.TYPE.CREATE,
+                key: constant.KEYS.TICKET_CREATED_BY_EMAIL,
+                performed_by: userId,
+                entity_type: 'tickets',
+                entity: {
+                    tickets: ticket.id,
+                },
+                association: {
+                    tickets: [ticket.id],
+                    contacts: contact?.id ? [contact.id] : []
+                },
+                company_id: companyId,
+                meta_data: {
+                    ticket_id: ticket.id,
+                    ticket_title: ticket.title,
+                    source: 'email',
+                    direction: contact ? 'inbound' : 'outbound',
+                },
+            };
+
+            const createdActivity = await payloadService.create(payloadToken, "activity_logs", activityLogData);
+            return createdActivity;
+        } catch (error) {
+            console.error('Error handleCreateTicketActivityLog:', error);
+            return null;
+        }
+    },
+
+    async handleCreateTicketAssociations({
+        payloadToken,
+        ticketId,
+        contactId,
+        companyId,
+    }) {
+        try {
+            const associations = [];
+
+            // Handle contact association if contact exists
+            if (contactId) {
+                associations.push(
+                    payloadService.create(payloadToken, "crm_associations", {
+                        from: {
+                            objectId: ticketId,
+                            objectType: 'ticket',
+                            refId: ticketId,
+                        },
+                        to: {
+                            objectId: contactId,
+                            objectType: 'contact',
+                            refId: contactId,
+                        },
+                        associationType: 'ticket_to_contact',
+                    })
+                );
+            }
+
+            // Handle company association using the form's company ID
+            if (companyId) {
+                associations.push(
+                    payloadService.create(payloadToken, "crm_associations", {
+                        from: {
+                            objectId: ticketId,
+                            objectType: 'ticket',
+                            refId: ticketId,
+                        },
+                        to: {
+                            objectId: companyId,
+                            objectType: 'company',
+                            refId: companyId,
+                        },
+                        associationType: 'ticket_to_company',
+                    })
+                );
+            }
+
+            // Execute all associations in parallel
+            if (associations.length > 0) {
+                const createdAssociation = await Promise.all(associations);
+                return createdAssociation;
+            }
+
+            // Return empty array if no associations were needed
+            return [];
+        } catch (error) {
+            console.error('Error handleCreateTicketAssociations:', error);
+            return null;
+        }
+    },
 }
