@@ -282,7 +282,7 @@ export const emailProcesses = {
             }
 
             // Get config/defaults for the ticket
-            const ticketConfig = await payloadService.find(payloadToken, 'ticket_configs', {
+            let ticketConfig = await payloadService.find(payloadToken, 'ticket_configs', {
                 queryParams: [
                     `where[is_active][equals]=true`,
                     `where[company_id][equals]=${emailConfig?.company_id}`,
@@ -292,7 +292,9 @@ export const emailProcesses = {
                 returnSingle: true
             })
 
-            if (!ticketConfig) {
+            // Check if ticketConfig is valid and active
+            if (!ticketConfig || (Array.isArray(ticketConfig) && ticketConfig.length === 0) || !ticketConfig.is_active) {
+                consoleHelper("Skipped Ticket creation ", ticketConfig)
                 return null;
             }
 
