@@ -20,6 +20,7 @@ class BasicController {
                     isConnected: dbInfo?.isConnected,
                 },
                 memory: {
+                    rss: Math.round((process.memoryUsage().rss / 1024 / 1024) * 100) / 100,
                     used: Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 100) / 100,
                     total: Math.round((process.memoryUsage().heapTotal / 1024 / 1024) * 100) / 100,
                     external: Math.round((process.memoryUsage().external / 1024 / 1024) * 100) / 100
