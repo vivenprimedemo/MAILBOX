@@ -541,18 +541,8 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     parseOutlookMessage(message, folder) {
-
-        const ignorePropertyVal =
-            (message?.singleValueExtendedProperties?.find(
-                prop => prop.id === config.CUSTOM_HEADERS.OUTLOOK
-            )?.value === "true");
-
-        const ignoreHeaderVal =
-            (message?.internetMessageHeaders?.find(
-                header => header.name === config.CUSTOM_HEADERS.CRM_IGNORE
-            )?.value === "true");
-
-        const ignoreMessage = ignorePropertyVal || ignoreHeaderVal;
+        
+        const { ignoreMessage, associations } = this.parseCustomHeaders(message);
 
         return {
             id: message.id,
@@ -582,6 +572,23 @@ export class OutlookProvider extends BaseEmailProvider {
             references: [], // Not directly available in Graph API
             ignoreMessage: ignoreMessage,
             snippet: message?.bodyPreview,
+            associations: associations
+        };
+    }
+
+    parseCustomHeaders(message) {
+        const getHeader = (name) => message?.internetMessageHeaders?.find(header => header?.name?.toLowerCase() === name?.toLowerCase())?.value;
+
+        const ignorePropertyVal = message?.singleValueExtendedProperties?.find(
+                prop => prop.id === config.CUSTOM_HEADERS.OUTLOOK
+            )?.value === "true";
+
+        const ignoreHeaderVal = getHeader(config.CUSTOM_HEADERS.CRM_IGNORE) === "true";
+        const associationsHeaderVal = getHeader(config.CUSTOM_HEADERS.CRM_ASSOCIATIONS);
+
+        return {
+            ignoreMessage: ignorePropertyVal || ignoreHeaderVal,
+            associations: JSON.parse(associationsHeaderVal || '{}')
         };
     }
 
@@ -831,6 +838,18 @@ export class OutlookProvider extends BaseEmailProvider {
             toRecipient.findIndex(r => r.emailAddress.address.toLowerCase() === recipient.emailAddress.address.toLowerCase()) === index
         );
 
+        const customHeaders = [
+            {
+                name: config.CUSTOM_HEADERS.CRM_IGNORE,
+                value: (options.ignoreMessage || false).toString()
+            },
+        ];
+
+        options?.associations && customHeaders.push({
+            name: config.CUSTOM_HEADERS.CRM_ASSOCIATIONS,
+            value: JSON.stringify(options.associations)
+        });
+
         const replyMessage = {
             comment: options.bodyHtml || options.bodyText  || '',
             message: {
@@ -841,12 +860,7 @@ export class OutlookProvider extends BaseEmailProvider {
                         "value": (options.ignoreMessage || false).toString()
                     }
                 ],
-                internetMessageHeaders: [
-                    {
-                        name: config.CUSTOM_HEADERS.CRM_IGNORE,
-                        value: (options.ignoreMessage || false).toString()
-                    }
-                ]
+                internetMessageHeaders: customHeaders
             }
         };
 

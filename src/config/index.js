@@ -81,6 +81,7 @@ export const config = {
         GOOGLE: 'X-CRM-IGNORE',
         OUTLOOK: `String {a2b93407-9b8e-4011-bcbb-c44f50c1a915} Name X-CRM-IGNORE`,
         CRM_IGNORE: 'X-CRM-IGNORE',
+        CRM_ASSOCIATIONS: 'X-CRM-ASSOCIATIONS',
     },
 
     OAUTH_STATE_SECRET: 'super secret token for oauth state',

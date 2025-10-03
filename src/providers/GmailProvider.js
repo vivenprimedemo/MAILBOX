@@ -490,6 +490,7 @@ export class GmailProvider extends BaseEmailProvider {
             isEncrypted: false,
             isSigned: false,
             ignoreMessage: getHeader(config.CUSTOM_HEADERS.CRM_IGNORE) || false,
+            associations: JSON.parse(getHeader(config.CUSTOM_HEADERS.CRM_ASSOCIATIONS) || '{}')
         };
     }
 
@@ -803,6 +804,7 @@ export class GmailProvider extends BaseEmailProvider {
         message += `Subject: ${request.subject}\r\n`;
 
         request?.ignoreMessage && (message += `${config.CUSTOM_HEADERS.CRM_IGNORE}: ${request.ignoreMessage}\r\n`);
+        request?.associations && (message += `${config.CUSTOM_HEADERS.CRM_ASSOCIATIONS}: ${JSON.stringify(request.associations)}\r\n`);
 
         if (request.inReplyTo) {
             message += `In-Reply-To: ${request.inReplyTo}\r\n`;

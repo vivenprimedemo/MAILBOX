@@ -190,6 +190,7 @@ export const schemas = {
             })
         ).optional(),
         ignoreMessage: Joi.boolean().optional(),
+        associations: Joi.object().optional(),
     }).or('bodyText', 'bodyHtml'),
 
     updatePreferences: Joi.object({
