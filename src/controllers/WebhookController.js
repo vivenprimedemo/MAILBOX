@@ -16,7 +16,7 @@ export class WebhookController {
     static async processEmailMessage(emailMessage, emailConfig, provider) {
         const accessToken = await payloadService.generateAdminToken();
         try {
-            let emailConfigId;
+            let emailConfigId = emailConfig?._id;
             if (!emailMessage) {
                 logger.warn('Email message is null or undefined');
                 return;

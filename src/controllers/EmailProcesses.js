@@ -80,6 +80,7 @@ export const emailProcesses = {
                     cc: emailMessage?.cc,
                     bcc: emailMessage?.bcc,
                     accountId: emailConfig?._id,
+                    email: emailConfig?.email,
                     type: direction,
                 },
                 company_id: emailConfig?.company_id,
