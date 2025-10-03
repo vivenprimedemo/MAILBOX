@@ -117,20 +117,30 @@ export class WebhookController {
         ]);
 
         // Create ticket
-        const createdTicket = await emailProcesses.handleCreateTicket({
-            payloadToken: accessToken,
-            emailMessage,
-            associatedContact: contactFrom,
-            direction,
-            emailConfig
-        });
+        let ticket;
+        let ticketId = emailMessage?.associations?.tickets?.[0];
+        if(!ticketId){
+            ticket = await emailProcesses.handleCreateTicket({
+                payloadToken: accessToken,
+                emailMessage,
+                associatedContact: contactFrom,
+                direction,
+                emailConfig
+            });
+        } else {
+            ticket = await payloadService.find(accessToken, 'tickets', {
+                queryParams: [`where[id][equals]=${ticketId}`],
+                returnSingle: true,
+                depth: 0
+            });
+        }
 
         // Create activity
         const createdActivity = await emailProcesses.handleCreateActivity({
             payloadToken: accessToken,
             emailMessage,
             associatedContacts: [contactFrom, contactTo],
-            associatedTickets: createdTicket ? [createdTicket] : [],
+            associatedTickets: ticket ? [ticket] : [],
             direction,
             emailConfig
         });
@@ -138,12 +148,12 @@ export class WebhookController {
         console.log("\n\n-----------| Email Processing Completed |-----------\n")
         console.table({
             createdActivityId: createdActivity?.itemId,
-            createdTicketId: createdTicket?.id,
+            createdTicketId: ticket?.id,
             createdContactFromId: contactFrom?.id,
             createdContactToId: contactTo?.id,
             direction,
-            emailConfigId: emailConfig?._id || emailConfig?.id,
-            emailSubject: emailMessage?.subject,
+            emailConfigId: emailConfig?._id?.toString() || emailConfig?.email || emailConfig?.id,
+            emailSubject: emailMessage?.subject?.slice(0, 50) + '...',
         });
         
     }
