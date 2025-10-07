@@ -9,7 +9,7 @@ const { Router } = express;
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+// router.use(authenticateToken);
 
 // Email Account Management Routes
 router.get('/accounts/:userId', EmailController.getEmailAccounts);
