@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
+import { logger } from '../config/logger.js';
 
 export const authenticateToken = async (req, res, next) => {
     try {
@@ -8,6 +9,7 @@ export const authenticateToken = async (req, res, next) => {
         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
         if (!token) {
+            logger.error('[AUTH] Access token not found');
             return res.status(401).json({
                 success: false,
                 data: null,
@@ -25,6 +27,7 @@ export const authenticateToken = async (req, res, next) => {
 
         const user = await User.findOne({ _id: decoded.id }, { first_name: 1, last_name: 1, email: 1, roles: 1 });
         if (!user) {
+            logger.error('[AUTH] User not found');
             return res.status(401).json({
                 success: false,
                 data: null,
@@ -42,6 +45,7 @@ export const authenticateToken = async (req, res, next) => {
         req.userId = user._id;
         next();
     } catch (error) {
+        logger.error('Error authenticating token', error);
         if (error instanceof jwt.JsonWebTokenError) {
             return res.status(403).json({
                 success: false,
@@ -89,6 +93,7 @@ export const optionalAuth = async (req, res, next) => {
 
         next();
     } catch (error) {
+        logger.error('Error optional authenticating', error);
         // Continue without authentication
         next();
     }
@@ -98,6 +103,7 @@ export const requireEmailAccount = (req, res, next) => {
     const { accountId } = req.params;
 
     if (!req.user) {
+        logger.error('[AUTH] User not authenticated');
         return res.status(401).json({
             success: false,
             data: null,
@@ -113,6 +119,7 @@ export const requireEmailAccount = (req, res, next) => {
 
     const account = req.user.emailAccounts.find((acc) => acc.id === accountId);
     if (!account) {
+        logger.error('[EMAIL] Email account not found');
         return res.status(404).json({
             success: false,
             data: null,
@@ -127,6 +134,7 @@ export const requireEmailAccount = (req, res, next) => {
     }
 
     if (!account.isActive) {
+        logger.error('[EMAIL] Email account is disabled');
         return res.status(403).json({
             success: false,
             data: null,
