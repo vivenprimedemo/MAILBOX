@@ -4,8 +4,6 @@ import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
-import { folders, inbox } from '../helpers/index.js';
-import { getCache, setCache } from '../lib/redis.js';
 
 export class EmailService {
     providers = new Map();
@@ -86,16 +84,7 @@ export class EmailService {
             error.code = 'PROVIDER_INITIALIZATION_FAILED';
             throw error;
         }
-
-        const cacheKey = folders(accountId);
-        let response = await getCache(cacheKey);
-        if(!response) {
-            // If not cached fetch from provider with enhanced request
-            response = await provider.getFolders(request);
-            await setCache(cacheKey, response, 900);
-        }
-
-        return response;
+        return provider.getFolders(request);
     }
 
     async getEmails(accountId, userId, request, useCache = true) {
@@ -267,24 +256,19 @@ export class EmailService {
 
         try {
             // Try cache first if enabled
-            // if (useCache && !search && Object.keys(filters).length === 0) {
-            //     const cacheResult = await this.getEmailsFromCache(accountId, userId, request);
-            //     if (cacheResult) {
-            //         return cacheResult;
-            //     }
-            // }
-
-            const cacheKey = inbox(accountId, nextPage);
-            let response = await getCache(cacheKey);
-            if(!response) {
-                // If not cached fetch from provider with enhanced request
-                response = await provider.listEmailsV2(request);
-                await setCache(cacheKey, response, 900);
+            if (useCache && !search && Object.keys(filters).length === 0) {
+                const cacheResult = await this.getEmailsFromCache(accountId, userId, request);
+                if (cacheResult) {
+                    return cacheResult;
+                }
             }
+
+            // Fetch from provider with enhanced request
+            const response = await provider.listEmailsV2(request);
 
             if (response.data) {
                 // Cache emails for future use
-                // await this.cacheEmails(response.data, userId, accountId);
+                await this.cacheEmails(response.data, userId, accountId);
 
                 // Ensure consistent response format
                 return {

@@ -93,9 +93,7 @@ export const config = {
         host: process.env.REDIS_HOST || "127.0.0.1", // defualt to localhost
         port: process.env.REDIS_PORT || 6379, // default to 6379
         password: process.env.REDIS_PASSWORD || null // default to null
-    },
-
-    cache: process.env.CACHE || false,
+    }
 };
 
 export const provider_config_map = {

@@ -1,7 +1,6 @@
 // lib/redisCache.js
 import redisClient from "../config/redis.js";
 import { logger } from "../config/logger.js";
-import { config } from "../config/index.js";
 
 export const setCache = async (key, value, ttl = 3600) => {
     try {
@@ -13,7 +12,6 @@ export const setCache = async (key, value, ttl = 3600) => {
 
 export const getCache = async (key) => {
     try {
-        if(!config.cache) return null;
         const data = await redisClient.get(key);
         return data ? JSON.parse(data) : null;
     } catch (err) {
