@@ -1,5 +1,5 @@
 // Import dependencies
-import { logger } from '../config/logger.js';
+import logger from '../lib/logger.js';
 import { EmailConfig } from '../models/Email.js';
 import { AuthService } from '../services/AuthService.js';
 import { EmailService } from '../services/EmailService.js';
@@ -94,6 +94,7 @@ export class EmailController {
             );
 
             if (!result || (!result.data && !result.success)) {
+                logger.warn('Email not found', { accountId: req.params.accountId, messageId: req.params.messageId });
                 res.status(404).json({
                     success: false,
                     error: {
@@ -176,6 +177,7 @@ export class EmailController {
 
             const result = await EmailController.emailService.getThread(accountId, threadId, req.userId, { sortBy, sortOrder });
             if (!result) {
+                logger.warn('Thread not found', { accountId: req.params.accountId, threadId: req.params.threadId });
                 res.status(404).json({
                     success: false,
                     error: {
@@ -783,6 +785,7 @@ export class EmailController {
                 // Remove the account if connection failed
                 await AuthService.removeEmailAccount(req.userId, newAccount.id);
 
+                logger.error('Provider connection failed during account add', { userId: req.userId, accountType: accountData.type });
                 res.status(400).json({
                     success: false,
                     data: null,
@@ -834,6 +837,7 @@ export class EmailController {
             );
 
             if (!updatedAccount) {
+                logger.warn('Email account not found for update', { accountId: req.params.accountId, userId: req.userId });
                 res.status(404).json({
                     success: false,
                     data: null,
@@ -919,6 +923,7 @@ export class EmailController {
             );
 
             if (!result) {
+                logger.warn('Attachment not found', { accountId: req.params.accountId, messageId: req.params.messageId, attachmentId: req.params.attachmentId });
                 res.status(404).json({
                     success: false,
                     error: {

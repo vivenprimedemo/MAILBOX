@@ -2,6 +2,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { config } from '../config/index.js';
+import logger from '../lib/logger.js';
 
 // Rate limiting configurations
 export const authLimiter = rateLimit({
@@ -131,7 +132,7 @@ export const securityErrorHandler = (err, req, res, next) => {
     }
 
     // Log security-related errors
-    console.error('Security middleware error:', {
+    logger.error('Security middleware error', {
         error: err.message,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
@@ -164,7 +165,7 @@ export const securityLogger = (req, res, next) => {
 
         // Log suspicious activities
         if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode === 429) {
-            console.warn('Security event:', logData);
+            logger.warn('Security event', logData);
         }
     });
 

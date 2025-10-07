@@ -1,6 +1,6 @@
 import { CalendarService } from '../services/CalendarService.js';
 import { CalendarConfig } from '../models/Calendar.js';
-import { logger } from '../config/logger.js';
+import logger from '../lib/logger.js';
 
 export class CalendarController {
     static calendarService = new CalendarService();
@@ -380,6 +380,11 @@ export class CalendarController {
                 // Remove the account if connection failed
                 await CalendarConfig.findByIdAndDelete(savedAccount._id);
 
+                logger.error('Calendar provider connection failed', {
+                    userId: req.userId,
+                    email: accountData.email
+                });
+
                 return res.status(400).json({
                     success: false,
                     data: null,
@@ -438,6 +443,11 @@ export class CalendarController {
             );
 
             if (!updatedAccount) {
+                logger.warn('Calendar account not found for update', {
+                    accountId: req.params.accountId,
+                    userId: req.userId
+                });
+
                 return res.status(404).json({
                     success: false,
                     data: null,
@@ -494,6 +504,11 @@ export class CalendarController {
             });
 
             if (!deletedAccount) {
+                logger.warn('Calendar account not found for removal', {
+                    accountId: req.params.accountId,
+                    userId: req.userId
+                });
+
                 return res.status(404).json({
                     success: false,
                     data: null,

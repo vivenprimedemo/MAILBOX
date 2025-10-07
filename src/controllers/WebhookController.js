@@ -1,9 +1,8 @@
 import { google } from "googleapis";
-import { consoleHelper } from "../../consoleHelper.js";
 import { EmailController } from "./EmailController.js";
 import { EmailConfig } from "../models/Email.js";
 import { provider_config_map } from "../config/index.js";
-import { logger } from "../config/logger.js";
+import logger from "../lib/logger.js";
 import { payloadService } from "../services/payload.js";
 import { emailProcesses } from "./EmailProcesses.js";
 import { DeduplicationManager } from "../helpers/DeduplicationManager.js";
@@ -88,10 +87,17 @@ export class WebhookController {
             emailConfigId
         });
 
-        consoleHelper("shouldSkipEmail", isNeverLogged);
+        logger.info('Checking if email should be skipped', {
+            emailConfigId,
+            messageId: emailMessage?.id || emailMessage?.messageId,
+            isNeverLogged
+        });
 
         if (isNeverLogged) {
-            consoleHelper('Email is Blocked');
+            logger.info('Email is blocked from logging', {
+                emailConfigId,
+                messageId: emailMessage?.id || emailMessage?.messageId
+            });
             return true;
         }
         return false;
@@ -145,8 +151,7 @@ export class WebhookController {
             emailConfig
         });
 
-        console.log("\n\n-----------| Email Processing Completed |-----------\n")
-        console.table({
+        logger.info('Email processing completed', {
             createdActivityId: createdActivity?.itemId,
             createdTicketId: ticket?.id,
             createdContactFromId: contactFrom?.id,
@@ -155,7 +160,7 @@ export class WebhookController {
             emailConfigId: emailConfig?._id?.toString() || emailConfig?.email || emailConfig?.id,
             emailSubject: emailMessage?.subject?.slice(0, 50) + '...',
         });
-        
+
     }
 
     static isEmailSent(emailMessage, emailConfig) {
@@ -222,7 +227,11 @@ export class WebhookController {
         const { client_id, client_secret } =
             provider_config_map?.[emailConfig.provider] || {};
         if (!client_id || !client_secret) {
-            consoleHelper("Gmail Webhook Error - Missing client credentials");
+            logger.error('Gmail webhook error - Missing client credentials', {
+                emailAddress: emailConfig?.email,
+                accountId: emailConfig?._id,
+                provider: emailConfig?.provider
+            });
             return null;
         }
 
@@ -263,6 +272,10 @@ export class WebhookController {
             // Find and validate email configuration
             const emailConfig = await WebhookController.findAndValidateEmailConfig(emailAddress, 'gmail');
             if (!emailConfig) {
+                logger.error('Email config not found for Gmail webhook', {
+                    emailAddress,
+                    provider: 'gmail'
+                });
                 return res.status(404).json({
                     success: false,
                     error: "Email config not found or invalid provider",
@@ -294,6 +307,10 @@ export class WebhookController {
             // Create Gmail client
             const gmail = await WebhookController.getGmailClient(emailConfig);
             if (!gmail) {
+                logger.error('Failed to create Gmail client', {
+                    emailAddress: emailConfig?.email,
+                    accountId: emailConfig?._id
+                });
                 return res
                     .status(500)
                     .json({ success: false, error: "Failed to create Gmail client" });
@@ -379,8 +396,11 @@ export class WebhookController {
                 lastHistoryId: historyResponse.data.historyId,
             });
         } catch (error) {
-            consoleHelper("WEBHOOK: Gmail processing error:", error.message);
-            console.log(error);
+            logger.error('WEBHOOK: Gmail processing error', {
+                error: error.message,
+                stack: error.stack,
+                emailAddress: req.body?.message?.data ? JSON.parse(Buffer.from(req.body.message.data, "base64").toString("utf-8"))?.emailAddress : undefined
+            });
             return res.status(500).json({
                 success: false,
                 error: error.message,
@@ -450,7 +470,7 @@ export class WebhookController {
 
             res.status(200).json({ success: true });
         } catch (error) {
-            consoleHelper("Failed to handle Outlook notification", {
+            logger.error('Failed to handle Outlook notification', {
                 error: error.message,
                 stack: error.stack,
             });
@@ -519,9 +539,13 @@ export class WebhookController {
 
                         if (fullEmail) {
                             const emailConfig = await EmailConfig.findOne({ _id: accountId }).lean();
-                            
+
                             if(!emailConfig){
-                                throw new Error("❌ Could not find email config for account ID:", accountId);
+                                logger.error('Email config not found for Outlook notification', {
+                                    accountId,
+                                    messageId
+                                });
+                                throw new Error("Could not find email config for account ID: " + accountId);
                             }
 
                             await WebhookController.processEmailMessage(fullEmail, { clientState , ...emailConfig }, 'outlook');
@@ -529,19 +553,34 @@ export class WebhookController {
                             // Log special email types and debug info
                             WebhookController.logEmailTypeInfo(fullEmail);
                         } else {
-                            consoleHelper("❌ Could not fetch email content for message ID:", messageId);
+                            logger.error('Could not fetch email content for Outlook message', {
+                                messageId,
+                                accountId
+                            });
                         }
                     } else {
-                        consoleHelper("Could not extract account ID from client state:", clientState);
+                        logger.error('Could not extract account ID from client state', {
+                            clientState,
+                            messageId
+                        });
                     }
                 } catch (emailError) {
-                    consoleHelper("Error fetching full email:", emailError.message);
+                    logger.error('Error fetching full email for Outlook notification', {
+                        error: emailError.message,
+                        messageId,
+                        accountId: clientState?.split("_")[1]
+                    });
                 }
             }
 
             return { success: true };
         } catch (error) {
-            consoleHelper("Error processing Outlook notification", error.message);
+            logger.error('Error processing Outlook notification', {
+                error: error.message,
+                stack: error.stack,
+                messageId: notification?.resourceData?.id,
+                clientState: notification?.clientState
+            });
             throw error;
         }
     }

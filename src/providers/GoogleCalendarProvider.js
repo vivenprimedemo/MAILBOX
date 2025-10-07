@@ -1,6 +1,6 @@
 import { BaseCalendarProvider } from './BaseCalendarProvider.js';
 import { google } from 'googleapis';
-import { consoleHelper } from '../../consoleHelper.js';
+import logger from '../lib/logger.js';
 import { provider_config_map } from '../config/index.js';
 import { CalendarConfig } from '../models/Calendar.js';
 
@@ -50,7 +50,7 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
 
     async refreshAccessToken() {
         try {
-            consoleHelper("ATTEMPTING GOOGLE CALENDAR REFRESH ACCESS TOKEN");
+            logger.info('Attempting Google Calendar refresh access token', { accountId: this.config.id });
             if (!this.refreshToken) {
                 throw new Error('Refresh token or OAuth credentials missing');
             }
@@ -67,7 +67,10 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
 
             await this.updateCalendarAccessToken(this.config.id, this.accessToken);
         } catch (error) {
-            consoleHelper("GOOGLE CALENDAR REFRESH ACCESS TOKEN FAILED", error);
+            logger.error('Google Calendar refresh access token failed', {
+                error: error.message,
+                accountId: this.config.id
+            });
             throw error;
         }
     }
@@ -85,12 +88,13 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
                 ...options.headers
             }
         }).catch((error) => {
-            consoleHelper("GOOGLE CALENDAR REQUEST FAILED", error);
+            logger.error('Google Calendar request failed', {
+                error: error.message,
+                accountId: this.config.id,
+                url
+            });
             throw error;
         });
-
-        consoleHelper("GOOGLE CALENDAR REQUEST", { response });
-        consoleHelper("this.accessToken", this.accessToken );
 
         if (response.status === 401 && this.refreshToken) {
             await this.refreshAccessToken();
@@ -99,7 +103,12 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
 
         if (!response.ok) {
             const error = new Error(`Google Calendar API error: ${response.status} ${response.statusText}`);
-            consoleHelper("GOOGLE CALENDAR REQUEST FAILED", error);
+            logger.error('Google Calendar request failed', {
+                error: error.message,
+                accountId: this.config.id,
+                url,
+                status: response.status
+            });
             throw error;
         }
 
@@ -433,8 +442,8 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
         try {
             await CalendarConfig.updateOne(
                 { _id: accountId },
-                { 
-                    $set: { 
+                {
+                    $set: {
                         'auth.access_token': accessToken,
                         'auth.refresh_token': this.refreshToken,
                         updated_at: new Date()
@@ -442,7 +451,10 @@ export class GoogleCalendarProvider extends BaseCalendarProvider {
                 }
             );
         } catch (error) {
-            consoleHelper("Failed to update calendar access token in database", error);
+            logger.error('Failed to update calendar access token in database', {
+                error: error.message,
+                accountId
+            });
         }
     }
 }

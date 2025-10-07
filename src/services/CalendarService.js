@@ -1,7 +1,7 @@
 import { GoogleCalendarProvider } from '../providers/GoogleCalendarProvider.js';
 import { CalendarConfig } from '../models/Calendar.js';
-import { consoleHelper } from '../../consoleHelper.js';
 import { provider_config_map } from '../config/index.js';
+import logger from '../lib/logger.js';
 
 export class CalendarService {
     providerInstances = new Map();
@@ -28,11 +28,13 @@ export class CalendarService {
         try {
             const calendar_config = await CalendarConfig.findOne({ _id: accountId });
             if (!calendar_config) {
+                logger.error('Calendar configuration not found', { accountId });
                 throw new Error('Calendar configuration not found');
             }
 
             const calendar_provider = calendar_config?.provider;
             if (calendar_provider !== 'google') {
+                logger.error('Unsupported calendar provider', { calendar_provider, accountId });
                 throw new Error('Only Google Calendar is supported currently');
             }
 
@@ -51,7 +53,7 @@ export class CalendarService {
             provider = this.createProvider(provider_config, accountId);
             await provider.connect();
         } catch (error) {
-            consoleHelper("CalendarService@getProvider", error);
+            logger.error('Failed to get calendar provider', { error: error.message, accountId });
             return null;
         }
 
@@ -72,7 +74,7 @@ export class CalendarService {
             await provider.connect();
             return true;
         } catch (error) {
-            console.error(`Failed to connect calendar provider for account ${accountId}:`, error);
+            logger.error('Failed to connect calendar provider', { error: error.message, accountId });
             return false;
         }
     }

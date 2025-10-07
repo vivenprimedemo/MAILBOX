@@ -1,7 +1,7 @@
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { Client } from '@microsoft/microsoft-graph-client';
 import 'isomorphic-fetch';
-import { consoleHelper } from '../../consoleHelper.js';
+import logger from '../lib/logger.js';
 import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 import { BaseEmailProvider } from './BaseEmailProvider.js';
@@ -27,7 +27,10 @@ export class OutlookProvider extends BaseEmailProvider {
             };
             this.msalInstance = new ConfidentialClientApplication(msalConfig);
         } else {
-            console.warn('MSAL not properly configured - missing clientId or clientSecret');
+            logger.warn('MSAL not properly configured - missing clientId or clientSecret', {
+                hasClientId: !!this.config.auth.clientId,
+                hasClientSecret: !!this.config.auth.clientSecret
+            });
         }
     }
     getCapabilities() {
@@ -88,7 +91,12 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     async refreshAccessToken() {
-        consoleHelper("ATTEMPT REFRESH ACCESS TOKEN");
+        logger.info('Attempting to refresh access token', {
+            accountId: this.config.id,
+            hasRefreshToken: !!this.refreshToken,
+            hasClientId: !!this.config.auth.clientId,
+            hasClientSecret: !!this.config.auth.clientSecret
+        });
         if (!this.refreshToken || !this.config.auth.clientId || !this.config.auth.clientSecret) {
             throw new Error('Refresh token or OAuth credentials missing');
         }
@@ -112,7 +120,11 @@ export class OutlookProvider extends BaseEmailProvider {
                 }
             });
         } catch (error) {
-            console.error('Failed to refresh access token:', error);
+            logger.error('Failed to refresh access token', {
+                accountId: this.config.id,
+                error: error.message,
+                stack: error.stack
+            });
             throw new Error('Failed to refresh access token');
         }
     }
@@ -393,7 +405,12 @@ export class OutlookProvider extends BaseEmailProvider {
                 }
             };
         } catch (err) {
-            console.error('listEmailsV2 error:', err);
+            logger.error('listEmailsV2 error', {
+                accountId: this.config.id,
+                folderId: request.folderId,
+                error: err.message,
+                stack: err.stack
+            });
             throw err;
         }
     }
@@ -738,7 +755,12 @@ export class OutlookProvider extends BaseEmailProvider {
             await Promise.all(deletePromises);
             return { deleted: ids.length };
         } catch (error) {
-            console.error('Outlook delete failed:', error);
+            logger.error('Outlook delete failed', {
+                accountId: this.config.id,
+                messageIds: ids,
+                error: error.message,
+                stack: error.stack
+            });
             throw new Error(`Failed to delete Outlook emails: ${error.message}`);
         }
     }
@@ -902,7 +924,11 @@ export class OutlookProvider extends BaseEmailProvider {
     async sync(folder) {
         // For real-time sync, implement Delta query or webhooks
         // This is a placeholder for polling-based sync
-        console.log(`Sync for folder ${folder} - implement Delta query for real-time updates`);
+        logger.info('Sync called for folder', {
+            accountId: this.config.id,
+            folder,
+            message: 'Delta query implementation needed for real-time updates'
+        });
     }
 
     async createFolder(name, parentFolderId) {
@@ -1019,7 +1045,9 @@ export class OutlookProvider extends BaseEmailProvider {
                     isActive: true
                 });
 
-                console.log(`✅ Created ${type} subscription:`, {
+                logger.info('Created subscription', {
+                    accountId: this.config.id,
+                    type,
                     subscriptionId: result.id,
                     resource: result.resource,
                     expirationDateTime: result.expirationDateTime
@@ -1031,8 +1059,12 @@ export class OutlookProvider extends BaseEmailProvider {
                 { _id: accountId },
                 { $set: { 'metadata.subscriptions': user.metadata.subscriptions } }
             );
-            
-            console.log(`Subscriptions saved for user ${user._id}:`, user.metadata.subscriptions.map(s => s.subscriptionId));
+
+            logger.info('Subscriptions saved for user', {
+                accountId: user._id,
+                subscriptionIds: user.metadata.subscriptions.map(s => s.subscriptionId),
+                count: user.metadata.subscriptions.length
+            });
 
             return {
                 success: true,
@@ -1042,7 +1074,12 @@ export class OutlookProvider extends BaseEmailProvider {
             };
 
     } catch(error) {
-        console.error("Outlook subscription error:", error.response?.data || error.message);
+        logger.error('Outlook subscription error', {
+            accountId: this.config.id,
+            error: error.message,
+            responseData: error.response?.data,
+            stack: error.stack
+        });
         throw new Error(`Failed to create Outlook subscription: ${error.message}`);
     }
 }
@@ -1076,7 +1113,11 @@ export class OutlookProvider extends BaseEmailProvider {
             const subscriptionsResponse = await this.graphClient.api('/subscriptions').get();
             activeSubscriptions = subscriptionsResponse.value || [];
         } catch (error) {
-            consoleHelper('Error fetching subscriptions from Microsoft Graph:', error.message);
+            logger.error('Error fetching subscriptions from Microsoft Graph', {
+                accountId,
+                error: error.message,
+                stack: error.stack
+            });
         }
 
         // Combine subscriptions from database and Microsoft Graph
@@ -1120,7 +1161,12 @@ export class OutlookProvider extends BaseEmailProvider {
             totalAttempted: allSubscriptionIds.size
         };
     } catch (error) {
-        console.error(`Error deleting subscriptions for account ${accountId}:`, error.response?.data || error.message);
+        logger.error('Error deleting subscriptions', {
+            accountId,
+            error: error.message,
+            responseData: error.response?.data,
+            stack: error.stack
+        });
         throw new Error(`Failed to delete subscriptions: ${error.message}`);
     }
 }
@@ -1137,7 +1183,12 @@ export class OutlookProvider extends BaseEmailProvider {
             subscriptions: subscriptions.value || []
         };
     } catch (error) {
-        console.error('Error listing subscriptions:', error.response?.data || error.message);
+        logger.error('Error listing subscriptions', {
+            accountId: this.config.id,
+            error: error.message,
+            responseData: error.response?.data,
+            stack: error.stack
+        });
         throw new Error(`Failed to list subscriptions: ${error.message}`);
     }
 }

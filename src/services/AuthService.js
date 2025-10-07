@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
+import logger from '../lib/logger.js';
 
 export class AuthService {
     static JWT_SECRET = config.JWT_SECRET;
@@ -60,12 +61,14 @@ export class AuthService {
         });
 
         if (!user) {
+            logger.warn('Login attempt with invalid credentials', { username });
             throw new Error('Invalid credentials');
         }
 
         // Verify password
         const isValidPassword = await bcrypt.compare(password, user.passwordHash);
         if (!isValidPassword) {
+            logger.warn('Login attempt with invalid password', { username });
             throw new Error('Invalid credentials');
         }
 
@@ -85,12 +88,14 @@ export class AuthService {
 
             const user = await User.findOne({ id: decoded.userId, isActive: true });
             if (!user) {
+                logger.error('User not found during token refresh', { userId: decoded.userId });
                 throw new Error('User not found');
             }
 
             const token = this.generateToken(user.id);
             return { token };
         } catch (error) {
+            logger.error('Token refresh failed', { error: error.message });
             throw new Error('Invalid or expired token');
         }
     }
@@ -124,12 +129,14 @@ export class AuthService {
     static async updatePassword(userId, currentPassword, newPassword) {
         const user = await User.findOne({ id: userId, isActive: true });
         if (!user) {
+            logger.error('User not found during password update', { userId });
             throw new Error('User not found');
         }
 
         // Verify current password
         const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
         if (!isValidPassword) {
+            logger.warn('Invalid current password during password update', { userId });
             throw new Error('Invalid current password');
         }
 
@@ -159,6 +166,7 @@ export class AuthService {
     static async addEmailAccount(userId, accountData) {
         const user = await User.findOne({ id: userId, isActive: true });
         if (!user) {
+            logger.error('User not found during email account add', { userId });
             throw new Error('User not found');
         }
 
@@ -180,6 +188,7 @@ export class AuthService {
     static async updateEmailAccount(userId, accountId, updateData) {
         const user = await User.findOne({ id: userId, isActive: true });
         if (!user) {
+            logger.error('User not found during email account update', { userId, accountId });
             throw new Error('User not found');
         }
 
@@ -209,6 +218,7 @@ export class AuthService {
     static async removeEmailAccount(userId, accountId) {
         const user = await User.findOne({ id: userId, isActive: true });
         if (!user) {
+            logger.error('User not found during email account removal', { userId, accountId });
             throw new Error('User not found');
         }
 
@@ -270,6 +280,7 @@ export class AuthService {
     static async updateEmailAccessToken(accountId, accessToken) {
         const user = await EmailConfig.findById(accountId);
         if (!user) {
+            logger.error('Email account not found during access token update', { accountId });
             throw new Error(`Email account not found ${accountId}`);
         }
 

@@ -2,6 +2,7 @@ import Imap from 'imap';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { BaseEmailProvider } from './BaseEmailProvider.js';
+import logger from '../lib/logger.js';
 // Import types would normally be here for TypeScript
 // For JavaScript, we'll use JSDoc comments instead
 
@@ -190,7 +191,12 @@ export class IMAPProvider extends BaseEmailProvider {
                                 const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folder);
                                 emails.push(email);
                             } catch (error) {
-                                console.error('Error parsing email:', error);
+                                logger.error('Error parsing IMAP email', {
+                                    error: error.message,
+                                    seqno,
+                                    uid,
+                                    folderId: folder
+                                });
                             }
                         });
                     });
@@ -307,7 +313,12 @@ export class IMAPProvider extends BaseEmailProvider {
                                         const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
                                         emails.push(email);
                                     } catch (error) {
-                                        console.error('Error parsing email:', error);
+                                        logger.error('Error parsing IMAP email in listEmails', {
+                                            error: error.message,
+                                            seqno,
+                                            uid,
+                                            folderId
+                                        });
                                     }
                                 });
                             });
@@ -443,7 +454,12 @@ export class IMAPProvider extends BaseEmailProvider {
                                         const email = this.parseEmailFromImap(parsed, uid.toString(), flags, folderId);
                                         emails.push(email);
                                     } catch (error) {
-                                        console.error('Error parsing email:', error);
+                                        logger.error('Error parsing IMAP email in listEmailsV2', {
+                                            error: error.message,
+                                            seqno,
+                                            uid,
+                                            folderId
+                                        });
                                     }
                                 });
                             });

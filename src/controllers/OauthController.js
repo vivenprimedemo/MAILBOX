@@ -1,4 +1,4 @@
-import { logger } from '../config/logger.js';
+import logger from '../lib/logger.js';
 import { config } from '../config/index.js';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';

@@ -1,5 +1,5 @@
 import { AuthService } from '../services/AuthService.js';
-import { logger } from '../config/logger.js';
+import logger from '../lib/logger.js';
 
 export class AuthController {
     static async register(req, res) {
@@ -130,6 +130,7 @@ export class AuthController {
             const user = await AuthService.getUserById(req.userId);
 
             if (!user) {
+                logger.warn('User profile not found', { userId: req.userId });
                 res.status(404).json({
                     success: false,
                     data: null,
@@ -178,6 +179,7 @@ export class AuthController {
             const user = await AuthService.updateUser(req.userId, updateData);
 
             if (!user) {
+                logger.warn('User not found for profile update', { userId: req.userId });
                 res.status(404).json({
                     success: false,
                     data: null,

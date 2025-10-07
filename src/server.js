@@ -2,7 +2,6 @@ import { config } from './config/index.js';
 import express from 'express';
 import cors from 'cors';
 import { Database } from './config/database.js';
-import { logger, httpLogger } from './config/logger.js';
 import apiRoutes from './routes/index.js';
 import {
     securityHeaders,
@@ -13,6 +12,7 @@ import {
     securityErrorHandler,
     securityLogger
 } from './middleware/security.js';
+import logger from './lib/logger.js';
 
 class EmailClientServer {
     app;
@@ -185,12 +185,14 @@ class EmailClientServer {
 
             // Start server
             this.app.listen(this.port, () => {
-                logger.info(`Email Client Server is running on port ${this.port}`, {
+                logger.info(`Email Client Server is running on port ${this.port}`);
+                logger.info(`Environment: ${config.NODE_ENV}`);
+                logger.info(`Server Info:`,JSON.stringify({
                     port: this.port,
                     environment: config.NODE_ENV,
                     nodeVersion: process.version,
                     pid: process.pid
-                });
+                }))
 
                 if (config.NODE_ENV === 'development') {
                     console.log(`\n🚀 Server running at:`);
@@ -234,7 +236,7 @@ class EmailClientServer {
 if (import.meta.url === `file://${process.argv[1]}`) {
     const server = new EmailClientServer();
     server.start().catch((error) => {
-        console.error('Failed to start server:', error);
+        logger.error('Failed to start server:', error);
         process.exit(1);
     });
 }

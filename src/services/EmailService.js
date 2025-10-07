@@ -1,9 +1,9 @@
-import { consoleHelper } from '../../consoleHelper.js';
 import { provider_config_map } from '../config/index.js';
 import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
+import logger from '../lib/logger.js';
 
 export class EmailService {
     providers = new Map();
@@ -51,7 +51,7 @@ export class EmailService {
             provider = this.createProvider(provider_config, accountId);
             await provider.connect();
         } catch (error) {
-            consoleHelper("EmailService@getProvider", error);
+            logger.error('Failed to get provider', { error: error.message, accountId });
             return null;
         }
 
@@ -72,7 +72,7 @@ export class EmailService {
             await provider.connect();
             return true;
         } catch (error) {
-            console.error(`Failed to connect provider for account ${accountId}:`, error);
+            logger.error('Failed to connect provider', { error: error.message, accountId });
             return false;
         }
     }
@@ -204,7 +204,7 @@ export class EmailService {
 
             return response;
         } catch (error) {
-            console.error('Error in listEmails:', error);
+            logger.error('Error in listEmails', { error: error.message, accountId, userId });
             const listError = new Error(error.message);
             listError.code = 'LIST_EMAILS_ERROR';
             listError.provider = provider.config?.type || 'unknown';
@@ -291,7 +291,7 @@ export class EmailService {
 
             return response;
         } catch (error) {
-            console.error('Error in listEmails:', error);
+            logger.error('Error in listEmailsV2', { error: error.message, accountId, userId });
             const listError = new Error(error.message);
             listError.code = 'LIST_EMAILS_ERROR';
             listError.provider = provider.config?.type || 'unknown';
@@ -341,7 +341,7 @@ export class EmailService {
                 };
             }
         } catch (error) {
-            console.error('Error fetching from cache:', error);
+            logger.error('Error fetching from cache', { error: error.message, accountId, userId, folderId });
         }
 
         return null;
@@ -593,7 +593,7 @@ export class EmailService {
                         syncedCount += emailsResponse.data.length;
                     }
                 } catch (error) {
-                    console.error(`Error syncing folder ${folder.name}:`, error);
+                    logger.error('Error syncing folder', { error: error.message, accountId, folder: folder.name });
                 }
             }
 
@@ -605,7 +605,7 @@ export class EmailService {
                 }
             };
         } catch (error) {
-            console.error(`Error syncing account ${accountId}:`, error);
+            logger.error('Error syncing account', { error: error.message, accountId });
             const syncError = new Error(error.message);
             syncError.code = 'SYNC_ERROR';
             syncError.provider = provider.config?.type || 'unknown';
@@ -628,7 +628,7 @@ export class EmailService {
                     { upsert: true, new: true }
                 );
             } catch (error) {
-                console.error('Error caching email:', error);
+                logger.error('Error caching email', { error: error.message, messageId: email.messageId, accountId });
             }
         }
     }

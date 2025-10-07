@@ -1,6 +1,6 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { google } from 'googleapis';
-import { consoleHelper } from '../../consoleHelper.js';
+import logger from '../lib/logger.js';
 import { config, provider_config_map } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 
@@ -34,7 +34,10 @@ export class GmailProvider extends BaseEmailProvider {
             await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/profile');
             this.isConnected = true;
         } catch (error) {
-            consoleHelper("ATTEMPT REFRESH GMAIL ACCESS TOKEN FOR " + this?.config?.email, error);
+            logger.warn('Attempting to refresh Gmail access token', {
+                email: this?.config?.email,
+                error: error.message
+            });
             if (this.refreshToken) {
                 await this.refreshAccessToken();
                 this.isConnected = true;
@@ -64,7 +67,10 @@ export class GmailProvider extends BaseEmailProvider {
 
     async refreshAccessToken() {
         try {
-            consoleHelper("ATTEMPTING GMAIL REFRESH ACCESS TOKEN");
+            logger.info('Attempting Gmail refresh access token', {
+                email: this?.config?.email,
+                accountId: this?.config?.id
+            });
             if (!this.refreshToken) {
                 throw new Error('Refresh token or OAuth credentials missing');
             }
@@ -81,7 +87,11 @@ export class GmailProvider extends BaseEmailProvider {
 
             await this.updateEmailAccessToken(this.config.id, this.accessToken);
         } catch (error) {
-            consoleHelper("GMAIL REFRESH ACCESS TOKEN FAILED", error);
+            logger.error('Gmail refresh access token failed', {
+                email: this?.config?.email,
+                accountId: this?.config?.id,
+                error: error.message
+            });
             throw error;
         }
     }
@@ -99,7 +109,11 @@ export class GmailProvider extends BaseEmailProvider {
                 ...options.headers
             }
         }).catch((error) => {
-            consoleHelper("GMAIL REQUEST FAILED", error);
+            logger.error('Gmail request failed', {
+                url,
+                email: this?.config?.email,
+                error: error.message
+            });
             throw error;
         });
 
@@ -110,7 +124,13 @@ export class GmailProvider extends BaseEmailProvider {
 
         if (!response.ok) {
             const error = new Error(`Gmail API error: ${response.status} ${response.statusText}`);
-            consoleHelper("GMAIL REQUEST FAILED", error);
+            logger.error('Gmail request failed', {
+                url,
+                status: response.status,
+                statusText: response.statusText,
+                email: this?.config?.email,
+                error: error.message
+            });
             throw error;
         }
 
@@ -399,7 +419,11 @@ export class GmailProvider extends BaseEmailProvider {
                 }
             };
         } catch (err) {
-            console.error('listEmailsV2 error:', err);
+            logger.error('listEmailsV2 error', {
+                folderId: request?.folderId,
+                email: this?.config?.email,
+                error: err.message
+            });
             throw err;
         }
     }
@@ -444,7 +468,12 @@ export class GmailProvider extends BaseEmailProvider {
             const email = this.parseGmailMessage(data, folderId);
             return email;
         } catch (error) {
-            consoleHelper('getEMAIL ERROR', error);
+            logger.error('Get email error', {
+                messageId,
+                folderId,
+                email: this?.config?.email,
+                error: error.message
+            });
             throw error;
         }
     }
@@ -723,9 +752,16 @@ export class GmailProvider extends BaseEmailProvider {
 
             return { deleted: ids.length };
         } catch (error) {
-            console.error('Gmail batchDelete failed:', error);
+            logger.error('Gmail batchDelete failed', {
+                messageIds: ids,
+                email: this?.config?.email,
+                error: error.message
+            });
             // If batchDelete fails, try moving to trash instead
-            console.log('Attempting to move emails to trash instead of permanent deletion...');
+            logger.info('Attempting to move emails to trash instead of permanent deletion', {
+                messageIds: ids,
+                email: this?.config?.email
+            });
             await this.updateLabels(ids, ['TRASH'], ['INBOX']);
             return { deleted: ids.length, moved_to_trash: true };
         }
@@ -840,7 +876,10 @@ export class GmailProvider extends BaseEmailProvider {
                 message += `Content-Transfer-Encoding: base64\r\n\r\n`;
 
                 if (!attachment.content) {
-                    console.error(`Attachment ${attachment.filename} has no content data`);
+                    logger.error('Attachment has no content data', {
+                        filename: attachment.filename,
+                        email: this?.config?.email
+                    });
                     continue;
                 }
 
@@ -998,7 +1037,12 @@ export class GmailProvider extends BaseEmailProvider {
                             contentType: att.contentType,
                         };
                     } catch (error) {
-                        console.error(`Failed to fetch attachment ${att.filename}:`, error);
+                        logger.error('Failed to fetch attachment', {
+                            filename: att.filename,
+                            messageId: originalEmail.id,
+                            email: this?.config?.email,
+                            error: error.message
+                        });
                         return null;
                     }
                 })
@@ -1016,7 +1060,10 @@ export class GmailProvider extends BaseEmailProvider {
     async sync(folder) {
         // Gmail doesn't support IDLE, but we can implement polling
         // This would typically be handled by webhooks in a production environment
-        console.log(`Sync not implemented for Gmail - use webhooks for real-time updates`);
+        logger.info('Sync not implemented for Gmail - use webhooks for real-time updates', {
+            folder,
+            email: this?.config?.email
+        });
     }
 
     async getAttachment(messageId, attachmentId) {
