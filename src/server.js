@@ -46,7 +46,7 @@ class EmailClientServer {
 
         // Request logging
         this.app.use((req, res, next) => {
-            httpLogger.info(`${req.method} ${req.path}`, {
+            logger.info(`${req.method} ${req.path}`, {
                 ip: req.ip,
                 userAgent: req.get('User-Agent'),
                 query: req.query,
