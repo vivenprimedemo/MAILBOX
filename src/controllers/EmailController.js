@@ -673,13 +673,14 @@ export class EmailController {
     static async forwardEmail(req, res) {
         try {
             const { accountId, messageId } = req.params;
-            const { to, message } = req.body;
+            const { to, message, attachments } = req.body;
 
             const result = await EmailController.emailService.forwardEmail(
                 accountId,
                 messageId,
                 to,
                 message,
+                attachments,
                 req.userId
             );
 

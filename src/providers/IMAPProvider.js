@@ -751,7 +751,7 @@ export class IMAPProvider extends BaseEmailProvider {
         });
     }
 
-    async forwardEmail(originalMessageId, to, message) {
+    async forwardEmail(originalMessageId, to, message, attachments = []) {
         const originalEmail = await this.getEmail(originalMessageId);
         if (!originalEmail) {
             throw new Error('Original email not found');

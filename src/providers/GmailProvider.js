@@ -536,11 +536,21 @@ export class GmailProvider extends BaseEmailProvider {
 
         const extractFromPart = (part) => {
             if (part.filename && part.body?.attachmentId) {
+                // Extract Content-ID from headers if present
+                const contentIdHeader = part.headers?.find(h => h.name.toLowerCase() === 'content-id');
+                const contentId = contentIdHeader?.value?.replace(/^<|>$/g, ''); // Remove < > brackets
+
+                // Check if attachment is inline (by disposition or presence of Content-ID)
+                const dispositionHeader = part.headers?.find(h => h.name.toLowerCase() === 'content-disposition');
+                const isInline = dispositionHeader?.value?.toLowerCase().includes('inline') || !!contentId;
+
                 attachments.push({
                     filename: part.filename,
                     contentType: part.mimeType,
                     size: part.body.size || 0,
-                    attachmentId: part.body.attachmentId
+                    attachmentId: part.body.attachmentId,
+                    contentId: contentId || undefined,
+                    isInline: isInline || false
                 });
             }
 
@@ -836,7 +846,15 @@ export class GmailProvider extends BaseEmailProvider {
             for (const attachment of request.attachments) {
                 message += `--${boundary}\r\n`;
                 message += `Content-Type: ${attachment.contentType || 'application/octet-stream'}\r\n`;
-                message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
+
+                // Handle inline attachments with Content-ID
+                if (attachment.isInline && attachment.cid) {
+                    message += `Content-Disposition: inline; filename="${attachment.filename}"\r\n`;
+                    message += `Content-ID: <${attachment.cid}>\r\n`;
+                } else {
+                    message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
+                }
+
                 message += `Content-Transfer-Encoding: base64\r\n\r\n`;
 
                 if (!attachment.content) {
@@ -890,12 +908,22 @@ export class GmailProvider extends BaseEmailProvider {
             text: request.bodyText,
             html: request.bodyHtml,
             headers: {}, // add custom headers here
-            attachments: request.attachments?.map(att => ({
-                filename: att.filename,
-                content: att.content,
-                contentType: att.contentType || "application/octet-stream",
-                encoding: Buffer.isBuffer(att.content) ? undefined : "base64",
-            })),
+            attachments: request.attachments?.map(att => {
+                const attachment = {
+                    filename: att.filename,
+                    content: att.content,
+                    contentType: att.contentType || "application/octet-stream",
+                    encoding: Buffer.isBuffer(att.content) ? undefined : "base64",
+                };
+
+                // Handle inline attachments
+                if (att.isInline && att.cid) {
+                    attachment.cid = att.cid;
+                    attachment.contentDisposition = 'inline';
+                }
+
+                return attachment;
+            }),
         };
 
         // Custom headers
@@ -956,7 +984,7 @@ export class GmailProvider extends BaseEmailProvider {
         }
     }
 
-    async forwardEmail(originalMessageId, to, message) {
+    async forwardEmail(originalMessageId, to, message, attachments = []) {
         const originalEmail = await this.getEmail(originalMessageId);
         if (!originalEmail || !originalEmail?.id) {
             throw new Error('Original email not found');
@@ -992,11 +1020,19 @@ export class GmailProvider extends BaseEmailProvider {
                 originalEmail.attachments.map(async (att) => {
                     try {
                         const attachmentData = await this.getAttachment(originalEmail.id, att.attachmentId);
-                        return {
+                        const attachment = {
                             filename: att.filename,
                             content: attachmentData.data,
                             contentType: att.contentType,
                         };
+
+                        // Preserve inline attachment properties
+                        if (att.isInline && att.contentId) {
+                            attachment.isInline = true;
+                            attachment.cid = att.contentId;
+                        }
+
+                        return attachment;
                     } catch (error) {
                         console.error(`Failed to fetch attachment ${att.filename}:`, error);
                         return null;
