@@ -23,7 +23,7 @@ export const authenticateToken = async (req, res, next) => {
 
         const decoded = jwt.verify(token, config.JWT_SECRET);
 
-        const user = await User.findOne({ id: decoded.userId, isActive: true });
+        const user = await User.findOne({ _id: decoded.id }, { first_name: 1, last_name: 1, email: 1, roles: 1 });
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -39,7 +39,7 @@ export const authenticateToken = async (req, res, next) => {
         }
 
         req.user = user;
-        req.userId = user.id;
+        req.userId = user._id;
         next();
     } catch (error) {
         if (error instanceof jwt.JsonWebTokenError) {
