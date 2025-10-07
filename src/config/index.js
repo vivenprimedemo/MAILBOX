@@ -87,6 +87,13 @@ export const config = {
     OAUTH_STATE_SECRET: 'super secret token for oauth state',
     OAUTH_STATE_EXPIRES_IN: '10m',
     OAUTH_REDIRECT_URI: 'http://localhost:8081/api/oauth/callback',
+
+    // Redis configuration
+    redis: {
+        host: process.env.REDIS_HOST || "127.0.0.1", // defualt to localhost
+        port: process.env.REDIS_PORT || 6379, // default to 6379
+        password: process.env.REDIS_PASSWORD || null // default to null
+    }
 };
 
 export const provider_config_map = {
