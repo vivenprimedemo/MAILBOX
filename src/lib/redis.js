@@ -5,6 +5,7 @@ import { config } from "../config/index.js";
 
 export const setCache = async (key, value, ttl = 3600) => {
     try {
+        if(!config.cache) return null;
         await redisClient.set(key, JSON.stringify(value), { EX: ttl });
     } catch (err) {
         logger.error("Redis setCache error:", err);
@@ -24,6 +25,7 @@ export const getCache = async (key) => {
 
 export const deleteCache = async (key) => {
     try {
+        if(!config.cache) return null;
         await redisClient.del(key);
     } catch (err) {
         logger.error("Redis deleteCache error:", err);
