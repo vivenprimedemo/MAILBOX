@@ -110,7 +110,9 @@ export const schemas = {
             Joi.object({
                 filename: Joi.string().required(),
                 content: Joi.string().required(),
-                contentType: Joi.string().optional()
+                contentType: Joi.string().optional(),
+                cid: Joi.string().optional(),
+                isInline: Joi.boolean().optional()
             })
         ).optional()
     }).or('bodyText', 'bodyHtml'),
@@ -186,7 +188,9 @@ export const schemas = {
             Joi.object({
                 filename: Joi.string().required(),
                 content: Joi.string().required(),
-                contentType: Joi.string().optional()
+                contentType: Joi.string().optional(),
+                cid: Joi.string().optional(),
+                isInline: Joi.boolean().optional(),
             })
         ).optional(),
         ignoreMessage: Joi.boolean().optional(),

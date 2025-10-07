@@ -627,7 +627,8 @@ export class OutlookProvider extends BaseEmailProvider {
             size: attachment.size || 0,
             contentId: attachment.contentId,
             isInline: attachment.isInline || false,
-            attachmentId: attachment.id
+            attachmentId: attachment.id,
+            contentBytes: attachment?.contentBytes
         }));
     }
 
@@ -783,6 +784,41 @@ export class OutlookProvider extends BaseEmailProvider {
         };
     }
 
+    async resolveOutlookMessageId(messageId) {
+        if (!messageId) {
+            throw new Error('Message ID is required');
+        }
+
+        // Check if this looks like an Outlook ID (alphanumeric with hyphens/underscores, no angle brackets or @)
+        // Outlook IDs look like: AAMkAGE1M2IyZGNkLTE5NzUtNDYxZC04Y2E0LTkzZWVlNzM4MDg0MwBGAAAAAABkxw...
+        const isOutlookId = /^[A-Za-z0-9_\-=]+$/.test(messageId);
+
+        if (isOutlookId) {
+            // Already an Outlook ID, return as-is
+            return messageId;
+        }
+
+        // It's likely an internetMessageId (RFC 822 format like <abc@example.com>)
+        // Search for the message using the internetMessageId filter
+        try {
+            const messages = await this.graphClient
+                .api('/me/messages')
+                .filter(`internetMessageId eq '${messageId}'`)
+                .select('id')
+                .top(1)
+                .get();
+
+            if (messages?.value && messages.value.length > 0) {
+                return messages.value[0].id;
+            }
+
+            throw new Error(`Message not found with internetMessageId: ${messageId}`);
+        } catch (error) {
+            console.error('Error resolving Outlook message ID:', error);
+            throw new Error(`Failed to resolve message ID: ${error.message}`);
+        }
+    }
+
     async sendEmail(options) {
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
@@ -816,16 +852,26 @@ export class OutlookProvider extends BaseEmailProvider {
 
         // Add attachments if present
         if (options.attachments?.length) {
-            message.attachments = options.attachments.map(attachment => ({
-                '@odata.type': '#microsoft.graph.fileAttachment',
-                name: attachment.filename,
-                contentType: attachment.contentType || 'application/octet-stream',
-                contentBytes: typeof attachment.content === 'string'
-                    ? attachment.content
-                    : Buffer.isBuffer(attachment.content)
-                        ? attachment.content.toString('base64')
-                        : Buffer.from(attachment.content).toString('base64')
-            }));
+            message.attachments = options.attachments.map(attachment => {
+                const graphAttachment = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    name: attachment.filename,
+                    contentType: attachment.contentType || 'application/octet-stream',
+                    contentBytes: typeof attachment.content === 'string'
+                        ? attachment.content
+                        : Buffer.isBuffer(attachment.content)
+                            ? attachment.content.toString('base64')
+                            : Buffer.from(attachment.content).toString('base64')
+                };
+
+                // Add inline-specific properties for inline images
+                if (attachment.isInline && attachment.cid) {
+                    graphAttachment.contentId = attachment.cid;
+                    graphAttachment.isInline = true;
+                }
+
+                return graphAttachment;
+            });
         }
 
         await this.graphClient.api('/me/sendMail').post({
@@ -840,6 +886,9 @@ export class OutlookProvider extends BaseEmailProvider {
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }
+
+        // Resolve the Outlook message ID if internetMessageId is provided
+        const outlookMessageId = await this.resolveOutlookMessageId(originalMessageId);
 
         if(options?.to?.length > 0) {
             options.to = options.to.map(addr => ({
@@ -887,26 +936,39 @@ export class OutlookProvider extends BaseEmailProvider {
         };
 
         if (options.attachments?.length) {
-            replyMessage.attachments = options.attachments.map(attachment => ({
-                '@odata.type': '#microsoft.graph.fileAttachment',
-                name: attachment.filename,
-                contentType: attachment.contentType || 'application/octet-stream',
-                contentBytes: typeof attachment.content === 'string'
-                    ? attachment.content
-                    : Buffer.isBuffer(attachment.content)
-                        ? attachment.content.toString('base64')
-                        : Buffer.from(attachment.content).toString('base64')
-            }));
+            replyMessage.message.attachments = options.attachments.map(attachment => {
+                const graphAttachment = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    name: attachment.filename,
+                    contentType: attachment.contentType || 'application/octet-stream',
+                    contentBytes: typeof attachment.content === 'string'
+                        ? attachment.content
+                        : Buffer.isBuffer(attachment.content)
+                            ? attachment.content.toString('base64')
+                            : Buffer.from(attachment.content).toString('base64')
+                };
+
+                // Add inline-specific properties for inline images
+                if (attachment.isInline && attachment.cid) {
+                    graphAttachment.contentId = attachment.cid;
+                    graphAttachment.isInline = true;
+                }
+
+                return graphAttachment;
+            });
         }
 
         const endpoint = options.replyAll ? 'replyAll' : 'reply';
-        await this.graphClient.api(`/me/messages/${originalMessageId}/${endpoint}`).post(replyMessage);
+        await this.graphClient.api(`/me/messages/${outlookMessageId}/${endpoint}`).post(replyMessage);
     }
 
-    async forwardEmail(originalMessageId, to, message) {
+    async forwardEmail(originalMessageId, to, message, attachments = []) {
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }
+
+        // Resolve the Outlook message ID if internetMessageId is provided
+        const outlookMessageId = await this.resolveOutlookMessageId(originalMessageId);
 
         const forwardMessage = {
             comment: message || '',
@@ -918,7 +980,31 @@ export class OutlookProvider extends BaseEmailProvider {
             }))
         };
 
-        await this.graphClient.api(`/me/messages/${originalMessageId}/forward`).post(forwardMessage);
+        // Add attachments if present
+        if (attachments?.length) {
+            forwardMessage.attachments = attachments.map(attachment => {
+                const graphAttachment = {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    name: attachment.filename,
+                    contentType: attachment.contentType || 'application/octet-stream',
+                    contentBytes: typeof attachment.content === 'string'
+                        ? attachment.content
+                        : Buffer.isBuffer(attachment.content)
+                            ? attachment.content.toString('base64')
+                            : Buffer.from(attachment.content).toString('base64')
+                };
+
+                // Add inline-specific properties for inline images
+                if (attachment.isInline && attachment.cid) {
+                    graphAttachment.contentId = attachment.cid;
+                    graphAttachment.isInline = true;
+                }
+
+                return graphAttachment;
+            });
+        }
+
+        await this.graphClient.api(`/me/messages/${outlookMessageId}/forward`).post(forwardMessage);
     }
 
     async sync(folder) {
@@ -956,6 +1042,7 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     async getAttachment(messageId, attachmentId) {
+        console.log("getting attachment for you ")
         if (!this.graphClient) {
             throw new Error('Not connected to Outlook');
         }

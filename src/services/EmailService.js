@@ -559,7 +559,7 @@ export class EmailService {
         return provider.replyToEmail(originalMessageId, options);
     }
 
-    async forwardEmail(accountId, originalMessageId, to, message, userId = null) {
+    async forwardEmail(accountId, originalMessageId, to, message, attachments = [], userId = null) {
         const provider = await this.getProvider(accountId, userId);
         if (!provider) {
             const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
@@ -567,7 +567,7 @@ export class EmailService {
             throw error;
         }
 
-        return provider.forwardEmail(originalMessageId, to, message);
+        return provider.forwardEmail(originalMessageId, to, message, attachments);
     }
 
     async syncAccount(accountId, userId) {
