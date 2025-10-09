@@ -352,7 +352,7 @@ export class OutlookProvider extends BaseEmailProvider {
                     ? '/me/mailFolders/Inbox/messages'
                     : `/me/mailFolders/${folderId}/messages`;
 
-                query = this.graphClient.api(endpoint).expand('attachments');
+                query = this.graphClient.api(endpoint);
 
                 // 4️⃣ Apply filters
                 const filters = [];
