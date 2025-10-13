@@ -3,7 +3,7 @@ import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 export class EmailService {
     providers = new Map();

@@ -1,7 +1,7 @@
 import { GoogleCalendarProvider } from '../providers/GoogleCalendarProvider.js';
 import { CalendarConfig } from '../models/Calendar.js';
 import { provider_config_map } from '../config/index.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 export class CalendarService {
     providerInstances = new Map();

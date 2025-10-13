@@ -1,6 +1,6 @@
 // lib/redisCache.js
 import redisClient from "../config/redis.js";
-import logger from "./logger.js";
+import logger from "../utils/logger.js";
 
 export const setCache = async (key, value, ttl = 3600) => {
     try {

@@ -2,7 +2,7 @@ import { consoleHelper } from "../../consoleHelper.js";
 import { payloadService } from "../services/payload.js";
 import { EmailConfig } from "../models/Email.js";
 import { config } from "../config/index.js";
-import logger from "../lib/logger.js";
+import logger from "../utils/logger.js";
 import constant from "../utils/constants.js";
 
 export const emailProcesses = {

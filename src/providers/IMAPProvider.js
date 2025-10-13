@@ -2,7 +2,7 @@ import Imap from 'imap';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { BaseEmailProvider } from './BaseEmailProvider.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 // Import types would normally be here for TypeScript
 // For JavaScript, we'll use JSDoc comments instead
 

@@ -1,6 +1,6 @@
 import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { google } from 'googleapis';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 import { config, provider_config_map } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 

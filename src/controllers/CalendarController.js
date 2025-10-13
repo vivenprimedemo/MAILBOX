@@ -1,6 +1,6 @@
 import { CalendarService } from '../services/CalendarService.js';
 import { CalendarConfig } from '../models/Calendar.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 export class CalendarController {
     static calendarService = new CalendarService();

@@ -1,6 +1,6 @@
 import { BaseCalendarProvider } from './BaseCalendarProvider.js';
 import { google } from 'googleapis';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 import { provider_config_map } from '../config/index.js';
 import { CalendarConfig } from '../models/Calendar.js';
 

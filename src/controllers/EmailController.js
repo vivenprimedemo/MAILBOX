@@ -1,5 +1,5 @@
 // Import dependencies
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 import { EmailConfig } from '../models/Email.js';
 import { AuthService } from '../services/AuthService.js';
 import { EmailService } from '../services/EmailService.js';

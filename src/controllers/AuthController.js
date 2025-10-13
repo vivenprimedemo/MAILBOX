@@ -1,5 +1,5 @@
 import { AuthService } from '../services/AuthService.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 export class AuthController {
     static async register(req, res) {

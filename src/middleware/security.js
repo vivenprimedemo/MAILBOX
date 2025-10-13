@@ -2,7 +2,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { config } from '../config/index.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 // Rate limiting configurations
 export const authLimiter = rateLimit({

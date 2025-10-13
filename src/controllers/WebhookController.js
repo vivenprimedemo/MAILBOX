@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { EmailController } from "./EmailController.js";
 import { EmailConfig } from "../models/Email.js";
 import { provider_config_map } from "../config/index.js";
-import logger from "../lib/logger.js";
+import logger from "../utils/logger.js";
 import { payloadService } from "../services/payload.js";
 import { emailProcesses } from "./EmailProcesses.js";
 import { DeduplicationManager } from "../helpers/DeduplicationManager.js";

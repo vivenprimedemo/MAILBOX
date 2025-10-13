@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 
 export class AuthService {
     static JWT_SECRET = config.JWT_SECRET;

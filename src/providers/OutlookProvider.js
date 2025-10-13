@@ -1,7 +1,7 @@
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { Client } from '@microsoft/microsoft-graph-client';
 import 'isomorphic-fetch';
-import logger from '../lib/logger.js';
+import logger from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 import { BaseEmailProvider } from './BaseEmailProvider.js';

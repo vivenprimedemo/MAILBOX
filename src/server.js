@@ -12,7 +12,7 @@ import {
     securityErrorHandler,
     securityLogger
 } from './middleware/security.js';
-import logger from './lib/logger.js';
+import logger from './utils/logger.js';
 
 class EmailClientServer {
     app;
