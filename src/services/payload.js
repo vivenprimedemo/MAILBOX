@@ -17,6 +17,8 @@ export const payloadService = {
     generateAdminToken
 };
 
+const SOURCE = "EMAIL_INTEGRATION"
+
 // Payload FIND method
 async function find(accessToken, collection, { queryParams = [], sortBy = '', returnFull = false, returnSingle = false, limit = 9999999999, depth = 1, page = "" } = {}) {
     try {
@@ -74,7 +76,7 @@ async function create(accessToken, collection, bodyParameters = {}) {
     try {
         // Create new item
         const response = await restApiWrapper.post(
-            `${apiBaseUrl}/api/${collection}`,
+            `${apiBaseUrl}/api/${collection}?source=${SOURCE}`,
             bodyParameters,
             {
                 Authorization: `Bearer ${accessToken}`
@@ -104,7 +106,7 @@ async function create(accessToken, collection, bodyParameters = {}) {
 
 // Payload UPDATE method
 async function update(accessToken, collection, itemId, bodyParameters = {}) {
-    const returnResponse = await restApiWrapper.patch(`${apiBaseUrl}/api/${collection}/${itemId}`, bodyParameters, {
+    const returnResponse = await restApiWrapper.patch(`${apiBaseUrl}/api/${collection}/${itemId}?source=${SOURCE}`, bodyParameters, {
         Authorization: 'Bearer ' + accessToken
     });
     return returnResponse;
@@ -115,7 +117,7 @@ async function updateAll(accessToken, collection, bodyParameters = {}, { queryPa
     // Construct query string
     const queryString = queryParams.length ? `&${queryParams.join('&')}` : '';
 
-    const returnResponse = await restApiWrapper.patch(`${apiBaseUrl}/api/${collection}/?1=1${queryString}`, bodyParameters, {
+    const returnResponse = await restApiWrapper.patch(`${apiBaseUrl}/api/${collection}/?1=1${queryString}&source=${SOURCE}`, bodyParameters, {
         Authorization: 'Bearer ' + accessToken
     });
     return returnResponse;
@@ -139,7 +141,7 @@ async function findDelete(accessToken, collection, queryParams = {}) {
     const queryString = queryParams.length ? `&${queryParams.join('&')}` : '';
 
     // Fetch data
-    const returnResponse = await restApiWrapper.delete(`${apiBaseUrl}/api/${collection}?1=1${queryString}`, {
+    const returnResponse = await restApiWrapper.delete(`${apiBaseUrl}/api/${collection}?1=1${queryString}&source=${SOURCE}`, {
         Authorization: `Bearer ${accessToken}`
     });
 
