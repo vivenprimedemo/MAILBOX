@@ -208,5 +208,10 @@ export const schemas = {
     threadSort: Joi.object({
         sortBy: Joi.string().valid('date', 'subject', 'from').default('date'),
         sortOrder: Joi.string().valid('asc', 'desc').default('desc')
+    }),
+
+    pinEmails: Joi.object({
+        messageIds: Joi.array().items(Joi.string()).min(1).required(),
+        folder: Joi.string().optional()
     })
 };

@@ -482,6 +482,44 @@ export class EmailService {
         return response;
     }
 
+    async pinEmails(accountId, request, userId = null) {
+        const provider = await this.getProvider(accountId, userId);
+        if (!provider) {
+            const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+            error.code = 'PROVIDER_INITIALIZATION_FAILED';
+            throw error;
+        }
+
+        // Check if provider supports pinning
+        if (typeof provider.pinEmails !== 'function') {
+            const error = new Error('Pinning emails is not supported by this provider');
+            error.code = 'PIN_NOT_SUPPORTED';
+            throw error;
+        }
+
+        const response = await provider.pinEmails(request);
+        return response;
+    }
+
+    async unpinEmails(accountId, request, userId = null) {
+        const provider = await this.getProvider(accountId, userId);
+        if (!provider) {
+            const error = new Error('Failed to initialize email provider. Please check your account configuration and credentials.');
+            error.code = 'PROVIDER_INITIALIZATION_FAILED';
+            throw error;
+        }
+
+        // Check if provider supports unpinning
+        if (typeof provider.unpinEmails !== 'function') {
+            const error = new Error('Unpinning emails is not supported by this provider');
+            error.code = 'UNPIN_NOT_SUPPORTED';
+            throw error;
+        }
+
+        const response = await provider.unpinEmails(request);
+        return response;
+    }
+
     async deleteEmails(accountId, messageIds, folder, userId = null) {
         const provider = await this.getProvider(accountId, userId);
         if (!provider) {
