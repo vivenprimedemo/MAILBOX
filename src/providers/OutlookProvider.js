@@ -6,6 +6,9 @@ import { config } from '../config/index.js';
 import { EmailConfig } from '../models/Email.js';
 import { BaseEmailProvider } from './BaseEmailProvider.js';
 
+// Category name used for pinning messages
+const PINNED_CATEGORY = 'Pinned';
+
 export class OutlookProvider extends BaseEmailProvider {
     constructor(config) {
         super(config);
@@ -330,8 +333,10 @@ export class OutlookProvider extends BaseEmailProvider {
 
             if (!this.graphClient) throw new Error('Not connected to Outlook');
 
-            let query;
             let total = 0;
+            let emails = [];
+            let hasMore = false;
+            let nextLink = null;
 
             // 1️⃣ Get total count from folder metadata
             try {
@@ -341,20 +346,13 @@ export class OutlookProvider extends BaseEmailProvider {
                 total = 0; // fallback
             }
 
-            if (nextPage) {
-                // 2️⃣ Use nextLink for pagination (do NOT append top/skip)
-                const decodedNextPage = decodeURIComponent(nextPage);
-                const relativePath = decodedNextPage.replace('https://graph.microsoft.com/v1.0', '');
-                query = this.graphClient.api(relativePath);
-            } else {
-                // 3️⃣ First page: build endpoint
-                const endpoint = folderId.toLowerCase() === 'inbox'
-                    ? '/me/mailFolders/Inbox/messages'
-                    : `/me/mailFolders/${folderId}/messages`;
+            // Build base endpoint
+            const endpoint = folderId.toLowerCase() === 'inbox'
+                ? '/me/mailFolders/Inbox/messages'
+                : `/me/mailFolders/${folderId}/messages`;
 
-                query = this.graphClient.api(endpoint);
-
-                // 4️⃣ Apply filters
+            // 2️⃣ Build common filters
+            const buildFilters = () => {
                 const filters = [];
                 if (from) filters.push(`from/emailAddress/address eq '${from}'`);
                 if (to) filters.push(`toRecipients/any(r:r/emailAddress/address eq '${to}')`);
@@ -367,22 +365,77 @@ export class OutlookProvider extends BaseEmailProvider {
                 if (hasAttachment === false) filters.push(`hasAttachments eq false`);
                 if (dateFrom) filters.push(`receivedDateTime ge ${dateFrom.toISOString()}`);
                 if (dateTo) filters.push(`receivedDateTime le ${dateTo.toISOString()}`);
+                return filters;
+            };
 
-                if (filters.length > 0) query = query.filter(filters.join(' and '));
+            if (nextPage) {
+                // 3️⃣ For subsequent pages, use the nextLink (which excludes pinned messages)
+                const decodedNextPage = decodeURIComponent(nextPage);
+                const relativePath = decodedNextPage.replace('https://graph.microsoft.com/v1.0', '');
+                const query = this.graphClient.api(relativePath);
 
-                if (search) query = query.search(`"${search}"`);
+                const messages = await query.get();
+                emails = messages.value.map(msg => this.parseOutlookMessage(msg, folderId));
+                hasMore = !!messages['@odata.nextLink'];
+                nextLink = messages['@odata.nextLink'];
+            } else {
+                // 4️⃣ First page: fetch pinned messages first, then unpinned
+                const filters = buildFilters();
 
-                // 5️⃣ Only use top for first page
-                query = query.top(limit);
+                // Fetch ALL pinned messages (no limit, ordered by date)
+                let pinnedQuery = this.graphClient.api(endpoint);
+                const pinnedFilters = [...filters, `categories/any(c:c eq '${PINNED_CATEGORY}')`];
+                if (pinnedFilters.length > 0) {
+                    pinnedQuery = pinnedQuery.filter(pinnedFilters.join(' and '));
+                }
+                if (search) pinnedQuery = pinnedQuery.search(`"${search}"`);
+
+                pinnedQuery = pinnedQuery
+                    .orderby('receivedDateTime desc')
+                    .top(100); // Reasonable limit for pinned messages
+
+                let pinnedMessages = [];
+                try {
+                    const pinnedResponse = await pinnedQuery.get();
+                    pinnedMessages = pinnedResponse.value || [];
+                } catch (error) {
+                    logger.warn('Failed to fetch pinned messages, continuing with unpinned', {
+                        accountId: this.config.id,
+                        error: error.message
+                    });
+                }
+
+                const pinnedEmails = pinnedMessages.map(msg => this.parseOutlookMessage(msg, folderId));
+
+                // Calculate how many unpinned messages we need
+                const remainingLimit = Math.max(0, limit - pinnedEmails.length);
+
+                let unpinnedEmails = [];
+                if (remainingLimit > 0) {
+                    // Fetch unpinned messages to fill the rest of the page
+                    let unpinnedQuery = this.graphClient.api(endpoint);
+                    const unpinnedFilters = [...filters, `not (categories/any(c:c eq '${PINNED_CATEGORY}'))`];
+                    if (unpinnedFilters.length > 0) {
+                        unpinnedQuery = unpinnedQuery.filter(unpinnedFilters.join(' and '));
+                    }
+                    if (search) unpinnedQuery = unpinnedQuery.search(`"${search}"`);
+
+                    unpinnedQuery = unpinnedQuery
+                        .orderby('receivedDateTime desc')
+                        .top(remainingLimit);
+
+                    const unpinnedResponse = await unpinnedQuery.get();
+                    unpinnedEmails = unpinnedResponse.value.map(msg => this.parseOutlookMessage(msg, folderId));
+
+                    hasMore = !!unpinnedResponse['@odata.nextLink'];
+                    nextLink = unpinnedResponse['@odata.nextLink'];
+                }
+
+                // Combine: pinned first (sorted by date), then unpinned
+                emails = [...this.sortEmailsByPinned(pinnedEmails), ...unpinnedEmails];
             }
 
-            // 6️⃣ Fetch messages
-            const messages = await query.get();
-            const emails = messages.value.map(msg => this.parseOutlookMessage(msg, folderId));
-
-            const hasMore = !!messages['@odata.nextLink'];
-
-            // want the bodyhtml ,bodytext , attachment remove if isListEmails is true
+            // Remove body and attachments if listing only
             if(isListEmails === 'true' || isListEmails === true) {
                 emails.forEach((email) => {
                     delete email.bodyHtml;
@@ -401,7 +454,7 @@ export class OutlookProvider extends BaseEmailProvider {
                     currentPage: nextPage ? null : 1,
                     totalPages: Math.ceil(total / limit),
                     nextOffset: hasMore ? (nextPage ? null : limit) : null,
-                    nextPage: hasMore ? encodeURIComponent(messages['@odata.nextLink']) : null
+                    nextPage: hasMore ? encodeURIComponent(nextLink) : null
                 }
             };
         } catch (err) {
@@ -558,8 +611,10 @@ export class OutlookProvider extends BaseEmailProvider {
     }
 
     parseOutlookMessage(message, folder) {
-        
+
         const { ignoreMessage, associations } = this.parseCustomHeaders(message);
+        const categories = message.categories || [];
+        const isPinned = categories.includes(PINNED_CATEGORY);
 
         return {
             id: message.id,
@@ -582,7 +637,8 @@ export class OutlookProvider extends BaseEmailProvider {
                 answered: false, // Not directly available in Graph API
                 deleted: false
             },
-            categories: message.categories || [],
+            categories: categories,
+            isPinned: isPinned,
             folder: folder || 'inbox',
             provider: 'outlook',
             inReplyTo: null, // Not directly available in Graph API
@@ -591,6 +647,18 @@ export class OutlookProvider extends BaseEmailProvider {
             snippet: message?.bodyPreview,
             associations: associations
         };
+    }
+
+    sortEmailsByPinned(emails) {
+        // Sort emails to show pinned messages first, then by date
+        return emails.sort((a, b) => {
+            // If one is pinned and the other is not, pinned comes first
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+
+            // If both have the same pinned status, sort by date (newest first)
+            return b.date.getTime() - a.date.getTime();
+        });
     }
 
     parseCustomHeaders(message) {
@@ -720,6 +788,114 @@ export class OutlookProvider extends BaseEmailProvider {
             flag: { flagStatus: 'notFlagged' }
         });
         return { updated: request.messageIds.length };
+    }
+
+    async pinEmails(request) {
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        const { messageIds } = request;
+
+        // Validate input
+        if (!messageIds || messageIds.length === 0) {
+            throw new Error('No message IDs provided for pinning');
+        }
+
+        try {
+            // Add the "Pinned" category to each message
+            const pinPromises = messageIds.map(async (messageId) => {
+                try {
+                    // Get current categories
+                    const message = await this.graphClient.api(`/me/messages/${messageId}`).select('categories').get();
+                    const currentCategories = message.categories || [];
+
+                    // Add "Pinned" category if not already present
+                    if (!currentCategories.includes(PINNED_CATEGORY)) {
+                        const updatedCategories = [...currentCategories, PINNED_CATEGORY];
+                        await this.graphClient.api(`/me/messages/${messageId}`).patch({
+                            categories: updatedCategories
+                        });
+                    }
+                } catch (error) {
+                    logger.error('Failed to pin individual message', {
+                        accountId: this.config.id,
+                        messageId,
+                        error: error.message
+                    });
+                    throw error;
+                }
+            });
+
+            await Promise.all(pinPromises);
+
+            return {
+                data: { pinned: messageIds.length },
+                metadata: { provider: 'outlook' }
+            };
+        } catch (error) {
+            logger.error('Outlook pin failed', {
+                accountId: this.config.id,
+                messageIds,
+                error: error.message,
+                stack: error.stack
+            });
+            throw new Error(`Failed to pin Outlook emails: ${error.message}`);
+        }
+    }
+
+    async unpinEmails(request) {
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        const { messageIds } = request;
+
+        // Validate input
+        if (!messageIds || messageIds.length === 0) {
+            throw new Error('No message IDs provided for unpinning');
+        }
+
+        try {
+            // Remove the "Pinned" category from each message
+            const unpinPromises = messageIds.map(async (messageId) => {
+                try {
+                    // Get current categories
+                    const message = await this.graphClient.api(`/me/messages/${messageId}`).select('categories').get();
+                    const currentCategories = message.categories || [];
+
+                    // Remove "Pinned" category if present
+                    if (currentCategories.includes(PINNED_CATEGORY)) {
+                        const updatedCategories = currentCategories.filter(cat => cat !== PINNED_CATEGORY);
+                        await this.graphClient.api(`/me/messages/${messageId}`).patch({
+                            categories: updatedCategories
+                        });
+                    }
+                } catch (error) {
+                    logger.error('Failed to unpin individual message', {
+                        accountId: this.config.id,
+                        messageId,
+                        error: error.message
+                    });
+                    throw error;
+                }
+            });
+
+            await Promise.all(unpinPromises);
+
+            return {
+                data: { unpinned: messageIds.length },
+                metadata: { provider: 'outlook' }
+            };
+        } catch (error) {
+            logger.error('Outlook unpin failed', {
+                accountId: this.config.id,
+                messageIds,
+                error: error.message,
+                stack: error.stack
+            });
+            throw new Error(`Failed to unpin Outlook emails: ${error.message}`);
+        }
     }
 
     async updateMessageFlags(messageIds, updateData) {

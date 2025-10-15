@@ -543,6 +543,68 @@ export class EmailController {
         }
     }
 
+    static async pinEmails(req, res) {
+        try {
+            const { accountId } = req.params;
+            const { messageIds, folder } = req.body;
+
+            const result = await EmailController.emailService.pinEmails(accountId, { messageIds, folderId: folder }, req.userId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to pin emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'PIN_EMAILS_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to pin emails',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
+
+    static async unpinEmails(req, res) {
+        try {
+            const { accountId } = req.params;
+            const { messageIds, folder } = req.body;
+
+            const result = await EmailController.emailService.unpinEmails(accountId, { messageIds, folderId: folder }, req.userId);
+
+            res.json({
+                success: true,
+                data: result.data || result,
+                error: null,
+                metadata: result.metadata || {
+                    timestamp: new Date()
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to unpin emails', { error: error.message, stack: error.stack, accountId: req.params.accountId, messageIds: req.body.messageIds });
+            res.status(500).json({
+                success: false,
+                data: null,
+                error: {
+                    code: 'UNPIN_EMAILS_ERROR',
+                    message: error instanceof Error ? error.message : 'Failed to unpin emails',
+                    provider: '',
+                    timestamp: new Date()
+                },
+                metadata: {}
+            });
+        }
+    }
+
     static async deleteEmails(req, res) {
         try {
             const { accountId } = req.params;

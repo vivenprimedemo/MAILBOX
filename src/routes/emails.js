@@ -42,6 +42,8 @@ router.put('/accounts/:accountId/emails/read', validate(schemas.markEmails), Ema
 router.put('/accounts/:accountId/emails/unread', validate(schemas.markEmails), EmailController.markAsUnread);
 router.put('/accounts/:accountId/emails/flag', validate(schemas.markEmails), EmailController.markAsFlagged);
 router.put('/accounts/:accountId/emails/unflag', validate(schemas.markEmails), EmailController.markAsUnflagged);
+router.put('/accounts/:accountId/emails/pin', validate(schemas.pinEmails), EmailController.pinEmails);
+router.put('/accounts/:accountId/emails/unpin', validate(schemas.pinEmails), EmailController.unpinEmails);
 router.put('/accounts/:accountId/emails/delete', validate(schemas.markEmails), EmailController.deleteEmails);
 router.put('/accounts/:accountId/emails/move', validate(schemas.moveEmails), EmailController.moveEmails);
 
