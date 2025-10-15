@@ -14,7 +14,7 @@ import { config } from "../config/index.js";
  */
 export const setCache = async (key, value, ttl = 3600) => {
     try {
-        if(!config.cache) return;
+        if(!config.cache) throw new Error("Cache is disabled. Please enable it in config.");
         await cacheService.set(key, value, ttl);
     } catch (err) {
         logger.error("Redis setCache error:", err);
@@ -29,7 +29,7 @@ export const setCache = async (key, value, ttl = 3600) => {
  */
 export const getCache = async (key) => {
     try {
-        if(!config.cache) return null;
+        if(!config.cache) throw new Error("Cache is disabled. Please enable it in config.");
         return await cacheService.get(key);
     } catch (err) {
         logger.error("Redis getCache error:", err);
