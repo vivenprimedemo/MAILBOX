@@ -50,3 +50,54 @@ export const deleteCache = async (key) => {
         logger.error("Redis deleteCache error:", err);
     }
 };
+
+/**
+ * Clear inbox cache for a specific folder
+ * Clears the default cache key (first page) when nextPage is not provided
+ * @param {string} accountId - Account ID
+ * @param {string} folderId - Folder ID
+ * @param {string} nextPage - Next page token (optional, defaults to clearing first page)
+ * @returns {Promise<boolean>}
+ */
+export const clearInboxCache = async (accountId, folderId, nextPage = '') => {
+    try {
+         if(!config.cache) throw new Error("Cache is disabled. Please enable it in config.");
+        const { inbox } = await import('../helpers/index.js');
+
+        // Clear the default/first page cache (most common case)
+        const defaultKey = inbox(accountId, folderId, '');
+        logger.info('Clearing inbox cache (default page)', {
+            accountId,
+            folderId,
+            cacheKey: defaultKey
+        });
+        const defaultDeleted = await cacheService.delete(defaultKey);
+
+        // If a specific nextPage is provided, also clear that
+        if (nextPage) {
+            const pageKey = inbox(accountId, folderId, nextPage);
+            const pageDeleted = await cacheService.delete(pageKey);
+            logger.info('Cleared inbox cache (with pagination)', {
+                accountId,
+                folderId,
+                nextPage,
+                defaultKey,
+                pageKey,
+                defaultDeleted,
+                pageDeleted
+            });
+            return defaultDeleted || pageDeleted;
+        }
+
+        logger.info('Cleared inbox cache (default page)', {
+            accountId,
+            folderId,
+            cacheKey: defaultKey,
+            deleted: defaultDeleted
+        });
+        return defaultDeleted;
+    } catch (err) {
+        logger.error("Clear inbox cache error:", err);
+        return false;
+    }
+};

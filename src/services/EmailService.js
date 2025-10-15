@@ -1,6 +1,6 @@
 import { provider_config_map } from '../config/index.js';
 import { inbox } from '../helpers/index.js';
-import { deleteCache, getCache, setCache } from '../lib/redis.js';
+import { clearInboxCache, getCache, setCache } from '../lib/redis.js';
 import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
@@ -258,7 +258,7 @@ export class EmailService {
 
         try {
             // Build cache key
-            const cacheKey = inbox(accountId, nextPage);
+            const cacheKey = inbox(accountId, folderId, nextPage);
 
             // Try Redis cache first if enabled (2-min TTL)
             if (useCache) {
@@ -419,9 +419,15 @@ export class EmailService {
         }
 
         const response = await provider.markAsRead(request);
-        if (response.data) {
-            await this.updateEmailFlags(request.messageIds, { seen: true });
+
+        // Update flags in MongoDB
+        await this.updateEmailFlags(request.messageIds, { seen: true });
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
         }
+
         return response;
     }
 
@@ -434,8 +440,13 @@ export class EmailService {
         }
 
         const response = await provider.markAsUnread(request);
-        if (response.data) {
-            await this.updateEmailFlags(request.messageIds, { seen: false });
+
+        // Update flags in MongoDB
+        await this.updateEmailFlags(request.messageIds, { seen: false });
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
         }
         return response;
     }
@@ -449,8 +460,13 @@ export class EmailService {
         }
 
         const response = await provider.markAsFlagged(request);
-        if (response.data) {
-            await this.updateEmailFlags(request.messageIds, { flagged: true });
+
+        // Update flags in MongoDB
+        await this.updateEmailFlags(request.messageIds, { flagged: true });
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
         }
         return response;
     }
@@ -464,8 +480,13 @@ export class EmailService {
         }
 
         const response = await provider.markAsUnflagged(request);
-        if (response.data) {
-            await this.updateEmailFlags(request.messageIds, { flagged: false });
+
+        // Update flags in MongoDB
+        await this.updateEmailFlags(request.messageIds, { flagged: false });
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
         }
         return response;
     }
@@ -486,6 +507,12 @@ export class EmailService {
         }
 
         const response = await provider.pinEmails(request);
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
+        }
+
         return response;
     }
 
@@ -505,6 +532,12 @@ export class EmailService {
         }
 
         const response = await provider.unpinEmails(request);
+
+        // Clear inbox cache for the folder
+        if (request.folderId) {
+            await clearInboxCache(accountId, request.folderId);
+        }
+
         return response;
     }
 
@@ -517,8 +550,13 @@ export class EmailService {
         }
 
         const response = await provider.deleteEmails(messageIds, folder);
-        if (response && response.data) {
-            await this.updateEmailFlags(messageIds, { deleted: true });
+
+        // Update flags in MongoDB
+        await this.updateEmailFlags(messageIds, { deleted: true });
+
+        // Clear inbox cache for the folder
+        if (folder) {
+            await clearInboxCache(accountId, folder);
         }
         return response || {
             data: { deleted: messageIds.length },
@@ -542,13 +580,21 @@ export class EmailService {
         };
 
         const response = await provider.moveEmails(moveRequest);
-        if (response && (response.data || response.moved)) {
-            // Update local cache
-            await Email.updateMany(
-                { messageId: { $in: messageIds } },
-                { $set: { folder: toFolder } }
-            );
+
+        // Update local MongoDB cache
+        await Email.updateMany(
+            { messageId: { $in: messageIds } },
+            { $set: { folder: toFolder } }
+        );
+
+        // Clear inbox cache for both source and destination folders
+        if (fromFolder) {
+            await clearInboxCache(accountId, fromFolder);
         }
+        if (toFolder) {
+            await clearInboxCache(accountId, toFolder);
+        }
+
         return response || {
             data: { moved: messageIds.length },
             metadata: { provider: provider.config?.type || 'unknown' }
