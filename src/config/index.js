@@ -96,7 +96,9 @@ export const config = {
         clientName: process.env.REDIS_CLIENT_NAME || 'mailbox-valkey-client',
         requestTimeout: parseInt(process.env.REDIS_REQUEST_TIMEOUT) || 500, // default 500ms
         useTLS: process.env.REDIS_USE_TLS === 'true' // default false
-    }
+    },
+
+    cache: process.env.CACHE
 };
 
 export const provider_config_map = {

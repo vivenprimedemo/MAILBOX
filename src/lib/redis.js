@@ -2,6 +2,7 @@
 // Uses new CacheService under the hood
 import cacheService from "../services/CacheService.js";
 import logger from "../utils/logger.js";
+import { config } from "../config/index.js";
 
 /**
  * Set a value in cache
@@ -13,6 +14,7 @@ import logger from "../utils/logger.js";
  */
 export const setCache = async (key, value, ttl = 3600) => {
     try {
+        if(!config.cache) return;
         await cacheService.set(key, value, ttl);
     } catch (err) {
         logger.error("Redis setCache error:", err);
@@ -27,6 +29,7 @@ export const setCache = async (key, value, ttl = 3600) => {
  */
 export const getCache = async (key) => {
     try {
+        if(!config.cache) return null;
         return await cacheService.get(key);
     } catch (err) {
         logger.error("Redis getCache error:", err);
