@@ -13,6 +13,7 @@ import {
     securityLogger
 } from './middleware/security.js';
 import logger from './utils/logger.js';
+import { getValkeyClient, closeValkeyClient } from './config/redis.js';
 
 class EmailClientServer {
     app;
@@ -181,7 +182,9 @@ class EmailClientServer {
         try {
             // Connect to database
             await this.database.connect();
-            logger.info('Database connected successfully');
+
+            // Initialize Valkey cache connection
+            await getValkeyClient();
 
             // Start server
             this.app.listen(this.port, () => {
@@ -204,6 +207,7 @@ class EmailClientServer {
                     console.log(`   • Email threading and search`);
                     console.log(`   • Real-time synchronization`);
                     console.log(`   • Security middleware and rate limiting`);
+                    console.log(`   • Valkey cache support`);
                     console.log(`\n📖 API Documentation available at /api`);
                 }
             });
@@ -218,6 +222,10 @@ class EmailClientServer {
         logger.info('Starting graceful shutdown...');
 
         try {
+            // Close Valkey cache connection
+            await closeValkeyClient();
+            logger.info('Valkey cache connection closed');
+
             // Close database connection
             await this.database.disconnect();
             logger.info('Database connection closed');

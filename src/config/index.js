@@ -88,11 +88,14 @@ export const config = {
     OAUTH_STATE_EXPIRES_IN: '10m',
     OAUTH_REDIRECT_URI: 'http://localhost:8081/api/oauth/callback',
 
-    // Redis configuration
+    // Valkey/Redis configuration
     redis: {
-        host: process.env.REDIS_HOST || "127.0.0.1", // defualt to localhost
-        port: process.env.REDIS_PORT || 6379, // default to 6379
-        password: process.env.REDIS_PASSWORD || null // default to null
+        host: process.env.REDIS_HOST || "127.0.0.1", // default to localhost
+        port: parseInt(process.env.REDIS_PORT) || 6379, // default to 6379
+        password: process.env.REDIS_PASSWORD || null, // default to null
+        clientName: process.env.REDIS_CLIENT_NAME || 'mailbox-valkey-client',
+        requestTimeout: parseInt(process.env.REDIS_REQUEST_TIMEOUT) || 500, // default 500ms
+        useTLS: process.env.REDIS_USE_TLS === 'true' // default false
     }
 };
 
