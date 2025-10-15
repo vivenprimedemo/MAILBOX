@@ -29,7 +29,7 @@ export class CacheService {
     async _getClient() {
         const client = await getValkeyClient();
         if (!client) {
-            logger.debug('Cache client unavailable');
+            logger.error('Cache client unavailable');
         }
         return client;
     }
@@ -46,7 +46,10 @@ export class CacheService {
     async set(key, value, ttl = null) {
         try {
             const client = await this._getClient();
-            if (!client) return false;
+            if (!client) {
+                logger.error('Cache SET skipped - client unavailable', { key });
+                return false;
+            }
 
             const namespacedKey = this._buildKey(key);
             const serializedValue = JSON.stringify(value);
@@ -54,16 +57,17 @@ export class CacheService {
             const options = {};
             if (ttl !== null && ttl > 0) {
                 options.expiry = {
-                    type: 'Seconds',
+                    type: "EX",  // EX = seconds, PX = milliseconds
                     count: ttl
                 };
             }
 
+            logger.info('Cache SET attempt', { key: namespacedKey, ttl, valueSize: serializedValue.length });
             const result = await client.set(namespacedKey, serializedValue, options);
-            logger.debug('Cache SET', { key: namespacedKey, ttl, success: result === 'OK' });
+            logger.info('Cache SET result', { key: namespacedKey, ttl, result, success: result === 'OK' });
             return result === 'OK';
         } catch (err) {
-            logger.error('Cache SET error', { key, error: err.message });
+            logger.error('Cache SET error', { key, error: err.message, stack: err.stack });
             return false;
         }
     }
@@ -82,11 +86,11 @@ export class CacheService {
             const value = await client.get(namespacedKey);
 
             if (value === null) {
-                logger.debug('Cache MISS', { key: namespacedKey });
+                logger.error('Cache MISS', { key: namespacedKey });
                 return null;
             }
 
-            logger.debug('Cache HIT', { key: namespacedKey });
+            logger.info('Cache HIT', { key: namespacedKey });
             return JSON.parse(value);
         } catch (err) {
             logger.error('Cache GET error', { key, error: err.message });
@@ -106,7 +110,7 @@ export class CacheService {
 
             const namespacedKey = this._buildKey(key);
             const count = await client.del([namespacedKey]);
-            logger.debug('Cache DELETE', { key: namespacedKey, deleted: count });
+            logger.info('Cache DELETE', { key: namespacedKey, deleted: count });
             return count > 0;
         } catch (err) {
             logger.error('Cache DELETE error', { key, error: err.message });
@@ -148,7 +152,7 @@ export class CacheService {
 
             const namespacedKey = this._buildKey(key);
             const result = await client.expire(namespacedKey, seconds);
-            logger.debug('Cache EXPIRE', { key: namespacedKey, seconds, success: result });
+            logger.info('Cache EXPIRE', { key: namespacedKey, seconds, success: result });
             return result;
         } catch (err) {
             logger.error('Cache EXPIRE error', { key, error: err.message });
@@ -207,7 +211,7 @@ export class CacheService {
                 await Promise.all(expirePromises);
             }
 
-            logger.debug('Cache MSET', { count: Object.keys(pairs).length, ttl, success: result === 'OK' });
+            logger.info('Cache MSET', { count: Object.keys(pairs).length, ttl, success: result === 'OK' });
             return result === 'OK';
         } catch (err) {
             logger.error('Cache MSET error', { error: err.message });
@@ -234,7 +238,7 @@ export class CacheService {
                 result[key] = value !== null ? JSON.parse(value) : null;
             });
 
-            logger.debug('Cache MGET', { count: keys.length });
+            logger.info('Cache MGET', { count: keys.length });
             return result;
         } catch (err) {
             logger.error('Cache MGET error', { error: err.message });
@@ -254,7 +258,7 @@ export class CacheService {
 
             const namespacedKeys = keys.map(key => this._buildKey(key));
             const count = await client.del(namespacedKeys);
-            logger.debug('Cache MDEL', { count });
+            logger.info('Cache MDEL', { count });
             return count;
         } catch (err) {
             logger.error('Cache MDEL error', { error: err.message });
@@ -279,7 +283,7 @@ export class CacheService {
             const namespacedKey = this._buildKey(key);
             const serializedValue = JSON.stringify(value);
             const count = await client.hset(namespacedKey, { [field]: serializedValue });
-            logger.debug('Cache HSET', { key: namespacedKey, field, added: count });
+            logger.info('Cache HSET', { key: namespacedKey, field, added: count });
             return count >= 0;
         } catch (err) {
             logger.error('Cache HSET error', { key, field, error: err.message });
@@ -355,7 +359,7 @@ export class CacheService {
             const namespacedKey = this._buildKey(key);
             const fieldArray = Array.isArray(fields) ? fields : [fields];
             const count = await client.hdel(namespacedKey, fieldArray);
-            logger.debug('Cache HDEL', { key: namespacedKey, fields: fieldArray, deleted: count });
+            logger.info('Cache HDEL', { key: namespacedKey, fields: fieldArray, deleted: count });
             return count;
         } catch (err) {
             logger.error('Cache HDEL error', { key, fields, error: err.message });
@@ -400,7 +404,7 @@ export class CacheService {
             const value = increment === 1
                 ? await client.incr(namespacedKey)
                 : await client.incrBy(namespacedKey, increment);
-            logger.debug('Cache INCR', { key: namespacedKey, increment, newValue: value });
+            logger.info('Cache INCR', { key: namespacedKey, increment, newValue: value });
             return value;
         } catch (err) {
             logger.error('Cache INCR error', { key, error: err.message });
@@ -423,7 +427,7 @@ export class CacheService {
             const value = decrement === 1
                 ? await client.decr(namespacedKey)
                 : await client.decrBy(namespacedKey, decrement);
-            logger.debug('Cache DECR', { key: namespacedKey, decrement, newValue: value });
+            logger.info('Cache DECR', { key: namespacedKey, decrement, newValue: value });
             return value;
         } catch (err) {
             logger.error('Cache DECR error', { key, error: err.message });

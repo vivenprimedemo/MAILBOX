@@ -1,5 +1,5 @@
 
-export const inbox = (accountId, nextPage) =>  `EMAIL:INBOX:${accountId}:${nextPage}`;
+export const inbox = (accountId, nextPage) =>  `EMAIL:INBOX:${accountId}:${nextPage || 'default'}`;
 export const folders = (accountId) => `EMAIL:FOLDERS:${accountId}`;
 
 

@@ -1,4 +1,6 @@
 import { provider_config_map } from '../config/index.js';
+import { inbox } from '../helpers/index.js';
+import { deleteCache, getCache, setCache } from '../lib/redis.js';
 import { Email, EmailConfig } from '../models/Email.js';
 import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
@@ -255,38 +257,24 @@ export class EmailService {
         };
 
         try {
-            // Try cache first if enabled
-            if (useCache && !search && Object.keys(filters).length === 0) {
-                const cacheResult = await this.getEmailsFromCache(accountId, userId, request);
-                if (cacheResult) {
-                    return cacheResult;
+            // Build cache key
+            const cacheKey = inbox(accountId, nextPage);
+
+            // Try Redis cache first if enabled (2-min TTL)
+            if (useCache) {
+                const cachedData = await getCache(cacheKey);
+                if (cachedData) {
+                    logger.log('Redis cache HIT', { accountId, cacheKey });
+                    return cachedData;
                 }
             }
 
-            // Fetch from provider with enhanced request
+            // Fetch from provider
             const response = await provider.listEmailsV2(request);
 
-            if (response.data) {
-                // Cache emails for future use
-                await this.cacheEmails(response.data, userId, accountId);
-
-                // Ensure consistent response format
-                return {
-                    data: response.data,
-                    metadata: {
-                        total: response.metadata?.total || response.data.length,
-                        limit,
-                        offset,
-                        hasMore: response.metadata?.hasMore || (response.data.length === limit),
-                        currentPage: Math.floor(offset / limit) + 1,
-                        totalPages: response.metadata?.total ? Math.ceil(response.metadata.total / limit) : null,
-                        nextOffset: response.metadata?.hasMore ? offset + limit : null,
-                        provider: provider.config?.type || 'unknown',
-                        sortBy,
-                        sortOrder,
-                        appliedFilters: filters
-                    }
-                };
+            // Cache the provider response in Redis
+            if (useCache && response) {
+                await setCache(cacheKey, response, 300);
             }
 
             return response;
