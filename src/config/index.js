@@ -98,7 +98,7 @@ export const config = {
         useTLS: process.env.REDIS_USE_TLS === 'true' // default false
     },
 
-    cache: process.env.CACHE
+    cache: process.env.CACHE === 'true'
 };
 
 export const provider_config_map = {
