@@ -3,27 +3,29 @@ import express from 'express';
 import cors from 'cors';
 import { Database } from './config/database.js';
 import apiRoutes from './routes/index.js';
+import { closeValkeyClient, getValkeyClient } from './config/redis.js';
 import {
     securityHeaders,
     generalLimiter,
     compressionMiddleware,
-    sanitizeRequest,
     corsOptions,
     securityErrorHandler,
     securityLogger
 } from './middleware/security.js';
+import { startWorker } from './queues/workers/marketingEmailWorker.js';
 import logger from './utils/logger.js';
-import { getValkeyClient, closeValkeyClient } from './config/redis.js';
 
 class EmailClientServer {
     app;
     port;
     database;
+    worker;
 
     constructor() {
         this.app = express();
         this.port = config.PORT;
         this.database = Database.getInstance();
+        this.worker = null;
 
         this.initializeMiddleware();
         this.initializeRoutes();
@@ -186,6 +188,15 @@ class EmailClientServer {
             // Initialize Valkey cache connection
             await getValkeyClient();
 
+            // Start marketing email worker
+            try {
+                this.worker = await startWorker();
+                logger.info('Marketing email worker started successfully');
+            } catch (workerError) {
+                logger.error('Failed to start marketing email worker:', workerError);
+                // Continue server startup even if worker fails
+            }
+
             // Start server
             this.app.listen(this.port, () => {
                 logger.info(`Email Client Server is running on port ${this.port}`);
@@ -222,6 +233,16 @@ class EmailClientServer {
         logger.info('Starting graceful shutdown...');
 
         try {
+            // Close worker
+            if (this.worker) {
+                try {
+                    await this.worker.close();
+                    logger.info('Marketing email worker closed');
+                } catch (workerError) {
+                    logger.error('Error closing worker:', workerError);
+                }
+            }
+
             // Close Valkey cache connection
             await closeValkeyClient();
             logger.info('Valkey cache connection closed');

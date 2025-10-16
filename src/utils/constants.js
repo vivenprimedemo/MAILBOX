@@ -61,6 +61,10 @@ const constant = {
         yellow: '\x1b[33m',
         red: '\x1b[31m',
         blue: '\x1b[34m',
+    },
+
+    QUEUE: {
+        MARKETING_EMAILS: 'marketing_emails',
     }
 }
 

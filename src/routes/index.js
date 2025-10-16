@@ -5,6 +5,7 @@ import calendarRoutes from './calendar.js';
 import oauthRoutes from './oauth.js';
 import webhookRoutes from './webhooks.js';
 import basicController from '../controllers/BasicController.js';
+import marketingRoutes from './marketing.js';
 
 const router = Router();
 
@@ -20,6 +21,9 @@ router.use('/calendar', calendarRoutes);
 
 // Webhook Routes
 router.use('/webhook' , webhookRoutes)
+
+// Marketing Routes
+router.use('/marketing-email', marketingRoutes);
 
 // 404 handler for API routes
 router.use('*', basicController.handleNotFound);
