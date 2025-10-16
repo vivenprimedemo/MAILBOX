@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { Database } from './config/database.js';
 import apiRoutes from './routes/index.js';
+import { closeValkeyClient, getValkeyClient } from './config/redis.js';
 import {
     securityHeaders,
     generalLimiter,
@@ -13,8 +14,6 @@ import {
 } from './middleware/security.js';
 import { startWorker } from './queues/workers/marketingEmailWorker.js';
 import logger from './utils/logger.js';
-
-import { redisClient } from './config/redis.js';
 
 class EmailClientServer {
     app;
@@ -186,6 +185,9 @@ class EmailClientServer {
             // Connect to database
             await this.database.connect();
 
+            // Initialize Valkey cache connection
+            await getValkeyClient();
+
             // Start marketing email worker
             try {
                 this.worker = await startWorker();
@@ -241,6 +243,8 @@ class EmailClientServer {
                 }
             }
 
+            // Close Valkey cache connection
+            await closeValkeyClient();
             logger.info('Valkey cache connection closed');
 
             // Close database connection

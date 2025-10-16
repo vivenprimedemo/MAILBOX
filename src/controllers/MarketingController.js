@@ -1,5 +1,6 @@
 import { getMarketingEmailById } from '../helpers/marketingEmailHelper.js';
 import { getQueue } from '../queues/marketingEmailQueue.js';
+import { payloadService } from '../services/payload.js';
 
 class MarketingController {
 

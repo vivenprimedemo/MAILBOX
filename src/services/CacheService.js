@@ -1,8 +1,8 @@
-import { redisClient } from '../config/redis.js';
+import { getValkeyClient } from '../config/redis.js';
 import logger from '../utils/logger.js';
 
 /**
- * CacheService - Comprehensive caching service using ioredis
+ * CacheService - Comprehensive caching service using Valkey GLIDE
  * Provides a high-level API for cache operations with namespace support
  */
 export class CacheService {
@@ -24,10 +24,10 @@ export class CacheService {
 
     /**
      * Get cache client
-     * @returns {Promise<Redis|null>}
+     * @returns {Promise<GlideClient|null>}
      */
     async _getClient() {
-        const client = redisClient;
+        const client = await getValkeyClient();
         if (!client) {
             logger.error('Cache client unavailable');
         }
@@ -54,17 +54,16 @@ export class CacheService {
             const namespacedKey = this._buildKey(key);
             const serializedValue = JSON.stringify(value);
 
-            logger.info('Cache SET attempt', { key: namespacedKey, ttl, valueSize: serializedValue.length });
-
-            let result;
+            const options = {};
             if (ttl !== null && ttl > 0) {
-                // Use SETEX for setting with TTL (ttl in seconds)
-                result = await client.setex(namespacedKey, ttl, serializedValue);
-            } else {
-                // Use SET without TTL
-                result = await client.set(namespacedKey, serializedValue);
+                options.expiry = {
+                    type: "EX",  // EX = seconds, PX = milliseconds
+                    count: ttl
+                };
             }
 
+            logger.info('Cache SET attempt', { key: namespacedKey, ttl, valueSize: serializedValue.length });
+            const result = await client.set(namespacedKey, serializedValue, options);
             logger.info('Cache SET result', { key: namespacedKey, ttl, result, success: result === 'OK' });
             return result === 'OK';
         } catch (err) {
