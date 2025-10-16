@@ -189,13 +189,13 @@ class EmailClientServer {
             await getValkeyClient();
 
             // Start marketing email worker
-            try {
-                this.worker = await startWorker();
-                logger.info('Marketing email worker started successfully');
-            } catch (workerError) {
-                logger.error('Failed to start marketing email worker:', workerError);
-                // Continue server startup even if worker fails
-            }
+            // try {
+            //     this.worker = await startWorker();
+            //     logger.info('Marketing email worker started successfully');
+            // } catch (workerError) {
+            //     logger.error('Failed to start marketing email worker:', workerError);
+            //     // Continue server startup even if worker fails
+            // }
 
             // Start server
             this.app.listen(this.port, () => {
@@ -234,14 +234,14 @@ class EmailClientServer {
 
         try {
             // Close worker
-            if (this.worker) {
-                try {
-                    await this.worker.close();
-                    logger.info('Marketing email worker closed');
-                } catch (workerError) {
-                    logger.error('Error closing worker:', workerError);
-                }
-            }
+            // if (this.worker) {
+            //     try {
+            //         await this.worker.close();
+            //         logger.info('Marketing email worker closed');
+            //     } catch (workerError) {
+            //         logger.error('Error closing worker:', workerError);
+            //     }
+            // }
 
             // Close Valkey cache connection
             await closeValkeyClient();
