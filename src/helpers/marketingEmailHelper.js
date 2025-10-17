@@ -5,6 +5,8 @@ import { EmailConfig } from "../models/Email.js";
 import logger from "../utils/logger.js";
 import fs from "fs/promises";
 import path from "path";
+import { config } from "../config/index.js";
+import { UAParser } from "ua-parser-js";
 
 const emailService = new EmailService();
 
@@ -70,8 +72,21 @@ export const getRecipients = async (payloadToken, marketingEmail) => {
     return contactsRes?.data;
 }
 
+export const getCampaignById = async (payloadToken, campaignId) => {
+    try {
+        return await payloadService.find(payloadToken, 'campaigns', {
+            queryParams: [`where[id][equals]=${campaignId}`],
+            depth: 0,
+            returnSingle: true
+        });
+    } catch (error) {
+        logger.error('Error fetching campaign', { error: error.message, campaignId });
+        return null;
+    }
+}
 
-export const sendMarketingEmail = async (marketingEmail, contact, emailAccountId) => {
+
+export const sendMarketingEmail = async (marketingEmail, contact, campaign, emailAccountId, payloadToken) => {
     try {
         const personalizedHtml = personalizeHtml(
             marketingEmail.email_body_html,
@@ -82,7 +97,8 @@ export const sendMarketingEmail = async (marketingEmail, contact, emailAccountId
         const htmlWithTracking = insertTrackingParams(
             personalizedHtml,
             marketingEmail,
-            contact._id
+            contact._id,
+            campaign
         );
 
         // Send email using EmailService
@@ -98,6 +114,24 @@ export const sendMarketingEmail = async (marketingEmail, contact, emailAccountId
         };
 
         const result = await emailService.sendEmail(emailAccountId, sendRequest);
+
+        // Record SENT event in tracking database
+        if (result.success && payloadToken) {
+            await createTrackingEvent(payloadToken, 'SENT', {
+                marketingEmailId: marketingEmail.id,
+                contactId: contact._id,
+                campaignId: campaign?.id,
+                companyId: contact.company || null,
+                senderEmail: marketingEmail.from_email,
+                emailSubject: marketingEmail.subject,
+                messageId: result.data?.messageId || result.data?.id || null,
+                utmParams: {
+                    utm_source: 'marketing_email',
+                    utm_medium: 'email',
+                    utm_campaign: campaign?.name || null
+                }
+            });
+        }
 
         return {
             success: true,
@@ -156,11 +190,55 @@ function flattenContactData(obj, res = {}) {
     return res;
 }
 
-export const insertTrackingParams = (html, marketingEmail, contactId) => {
-    // TODO: implement logic to insert tracking params for open tracking and click tracking
-    // For now, return HTML as-is
-    // Future implementation can add tracking pixels and modify links
-    return html;
+
+export const insertTrackingParams = (html, marketingEmail, contactId, campaign) => {
+
+    const trackingParams = {
+        meid: marketingEmail.id,
+        cid: contactId,
+        campaign: campaign.id,
+        utm_source: 'marketing_email',
+        email_subject: marketingEmail.subject
+    };
+
+    // Convert the object to a query string
+    const queryString = new URLSearchParams(trackingParams).toString();
+
+    // Replace all anchor tags with tracking URLs
+    const trackedHtml = replaceAnchorsWithTracking(html, queryString);
+
+    // Append tracking pixel at the end of the email body
+    return insertTrackingPixel(trackedHtml, queryString);
+}
+
+
+const insertTrackingPixel = (html, queryString) => {
+    const trackingPixelUrl = `${config.APP_BASE_URL}/api/marketing-email/tracking/open?${queryString}`;
+    const trackingPixel = `<img src="${trackingPixelUrl}" style="display:none; width:1px; height:1px;" alt="" />`;
+    return html + trackingPixel;
+}
+
+
+const replaceAnchorsWithTracking = (html, queryString) => {
+    // Regex to match anchor tags with href attribute
+    const anchorRegex = /<a\s+([^>]*href\s*=\s*["']([^"']+)["'][^>]*)>/gi;
+
+    return html.replace(anchorRegex, (match, attributes, originalUrl) => {
+        // Skip if it's a mailto: or tel: link
+        if (originalUrl.startsWith('mailto:') || originalUrl.startsWith('tel:') || originalUrl.startsWith('#')) {
+            return match;
+        }
+
+        const trackingUrl = `${config.APP_BASE_URL}/api/marketing-email/tracking/click?${queryString}&url=${encodeURIComponent(originalUrl)}`;
+
+        // Replace the original href with tracking URL
+        const trackedAttributes = attributes.replace(
+            /href\s*=\s*["']([^"']+)["']/i,
+            `href="${trackingUrl}"`
+        );
+
+        return `<a ${trackedAttributes}>`;
+    });
 }
 
 
@@ -196,6 +274,7 @@ export const updateMarketingEmailSummary = async (payloadToken, marketingEmailId
     }
 }
 
+
 export const recordSendResult = async (payloadToken, marketingEmailId, contactId, contactEmail, status, errorDetails = null) => {
     try {
         // Create a send log entry (you may need to create this collection in your system)
@@ -228,71 +307,145 @@ export const recordSendResult = async (payloadToken, marketingEmailId, contactId
     }
 }
 
-export const saveSendSummaryToFile = async (marketingEmailId, summaryData) => {
+
+export const extractRequestMetadata = (req) => {
+    if (!req) return {};
+    const userAgent = req.headers['user-agent'] || '';
+    const parser = new UAParser(userAgent);
+    const result = parser.getResult();
+    const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                      req.headers['x-real-ip'] ||
+                      req.socket?.remoteAddress ||
+                      req.ip ||
+                      'unknown';
+    return {
+        ipAddress: ipAddress,
+        userAgent,
+        browser: result.browser?.name || 'unknown',
+        operatingSystem: result.os?.name || 'unknown',
+        deviceType: determineDeviceType(result.device?.type),
+        referrer: req.headers['referer'] || req.headers['referrer'] || 'unknown'
+    };
+};
+
+
+const determineDeviceType = (deviceType) => {
+    if (!deviceType) return 'desktop';
+
+    const type = deviceType.toLowerCase();
+    if (type.includes('mobile') || type.includes('phone')) return 'mobile';
+    if (type.includes('tablet')) return 'tablet';
+    return 'desktop';
+};
+
+
+export const createTrackingEvent = async (payloadToken, eventType, data) => {
     try {
-        // Create logs directory if it doesn't exist
-        const logsDir = path.join(process.cwd(), 'logs', 'marketing_emails');
-        await fs.mkdir(logsDir, { recursive: true });
+        const {
+            marketingEmailId,
+            contactId,
+            campaignId,
+            companyId,
+            senderEmail,
+            emailSubject,
+            messageId,
+            clickedUrl,
+            metadata = {},
+            utmParams = {}
+        } = data;
 
-        // Create filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `marketing-email-${marketingEmailId}-${timestamp}.json`;
-        const filePath = path.join(logsDir, filename);
-
-        // Prepare summary data
-        const summaryJson = {
+        // Build tracking event payload
+        const trackingPayload = {
+            event_type: eventType,
             marketing_email_id: marketingEmailId,
-            timestamp: new Date().toISOString(),
-            summary: {
-                total_contacts: summaryData.totalContacts || 0,
-                total_sent: summaryData.totalSent || 0,
-                total_failed: summaryData.totalFailed || 0,
-                total_delivered: summaryData.totalDelivered || 0,
-                success_rate: summaryData.totalContacts > 0
-                    ? ((summaryData.totalSent / summaryData.totalContacts) * 100).toFixed(2) + '%'
-                    : '0%'
-            },
-            email_details: {
-                subject: summaryData.subject,
-                from_email: summaryData.fromEmail,
-                from_name: summaryData.fromName,
-                reply_to: summaryData.replyTo,
-                scheduled_at: summaryData.scheduledAt,
-                sent_at: summaryData.sentAt
-            },
-            send_results: summaryData.sendResults || [],
-            errors: summaryData.errors || [],
+            contact: contactId,
+            campaign: campaignId,
+            company: companyId,
+            sender_email: senderEmail,
+            email_subject: emailSubject,
+            message_id: messageId || null,
+            utm_source: utmParams.utm_source || 'marketing_email',
+            utm_medium: utmParams.utm_medium || null,
+            utm_campaign: utmParams.utm_campaign || null,
+            utm_content: utmParams.utm_content || null,
+            utm_term: utmParams.utm_term || null,
             metadata: {
-                batch_size: summaryData.batchSize || 10,
-                total_batches: summaryData.totalBatches || 0,
-                processing_time_seconds: summaryData.processingTime || 0
+                ipAddress: metadata.ipAddress || null,
+                userAgent: metadata.userAgent || null,
+                browser: metadata.browser || null,
+                operatingSystem: metadata.operatingSystem || null,
+                deviceType: metadata.deviceType || 'unknown',
+                referrer: metadata.referrer || null,
+                clickedUrl: clickedUrl || null,
+                country: metadata.country || null,
+                city: metadata.city || null,
+                geoLocation: metadata.geoLocation || null,
+                bounceReason: metadata.bounceReason || null
             }
         };
 
-        // Write to file
-        await fs.writeFile(filePath, JSON.stringify(summaryJson, null, 2), 'utf8');
+        console.log("Tracking payload", trackingPayload)
 
-        logger.info('Send summary saved to file', {
-            marketingEmailId,
-            filePath,
-            totalSent: summaryData.totalSent,
-            totalFailed: summaryData.totalFailed
-        });
+        // Create tracking event in database
+        const result = await payloadService.create(payloadToken, 'tracking_emails', trackingPayload);
 
-        return {
-            success: true,
-            filePath,
-            filename
-        };
+        if (result.statusCode === 200) {
+            logger.info('Tracking event created', {
+                eventType,
+                marketingEmailId,
+                contactId,
+                trackingEventId: result.itemId
+            });
+            return { success: true, trackingEventId: result.itemId };
+        } else {
+            logger.error('Failed to create tracking event', {
+                eventType,
+                marketingEmailId,
+                contactId,
+                error: result.message
+            });
+            return { success: false, error: result.message };
+        }
     } catch (error) {
-        logger.error('Error saving send summary to file', {
+        logger.error('Error creating tracking event', {
             error: error.message,
-            marketingEmailId,
+            eventType,
             stack: error.stack
         });
-        return {
-            success: false,
-            error: error.message
-        };
+        return { success: false, error: error.message };
     }
+};
+
+export const handleMarketingEmailError = (error, marketingEmailId, logger) => {
+    logger.error('Marketing email send request failed', {
+        error: error.message,
+        marketingEmailId,
+        stack: error.stack
+    });
+
+    // Determine appropriate status code based on error type
+    let statusCode = 500;
+    let errorCode = 'MARKETING_EMAIL_SEND_ERROR';
+
+    if (error.code === 'MARKETING_EMAIL_NOT_FOUND') {
+        statusCode = 404;
+        errorCode = error.code;
+    } else if (error.code === 'EMAIL_ACCOUNT_NOT_FOUND') {
+        statusCode = 404;
+        errorCode = error.code;
+    } else if (error.code === 'VALIDATION_ERROR') {
+        statusCode = 400;
+        errorCode = error.code;
+    }
+
+    return {
+        statusCode,
+        body: {
+            success: false,
+            error: {
+                code: errorCode,
+                message: error.message || 'Failed to send marketing email'
+            }
+        }
+    };
 }

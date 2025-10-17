@@ -1,79 +1,159 @@
 import marketingEmailService from '../services/MarketingEmailService.js';
 import logger from '../utils/logger.js';
+import { createTrackingEvent, extractRequestMetadata, getMarketingEmailById, handleMarketingEmailError } from '../helpers/marketingEmailHelper.js';
+import { payloadService } from '../services/payload.js';
 
 class MarketingController {
 
     async sendNow(req, res) {
         const { marketingEmailId } = req.body;
-
+        const payloadToken = req.payloadToken;
         try {
-            // Extract payload token from Authorization header
-            const authHeader = req.headers.authorization;
-            if (!authHeader || !authHeader.startsWith('Bearer ')) {
-                return res.status(401).json({
-                    success: false,
-                    error: {
-                        code: 'TOKEN_REQUIRED',
-                        message: 'Authorization token is required in header'
-                    }
-                });
-            }
-
-            const payloadToken = authHeader.substring(7);
-
-            if (!payloadToken) {
-                return res.status(401).json({
-                    success: false,
-                    error: {
-                        code: 'TOKEN_REQUIRED',
-                        message: 'Payload token is required'
-                    }
-                });
-            }
-
-            // Validate marketingEmailId is provided
             if (!marketingEmailId) {
-                return res.status(400).json({
-                    success: false,
-                    error: {
-                        code: 'VALIDATION_ERROR',
-                        message: 'Marketing email ID is required'
-                    }
-                });
+                return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Marketing email ID is required' } });
             }
 
-            // Process marketing email using the service
             const result = await marketingEmailService.processMarketingEmail(payloadToken, marketingEmailId);
 
             return res.status(200).json(result);
 
         } catch (error) {
-            logger.error('Marketing email send request failed', {
-                error: error.message,
-                marketingEmailId,
-                stack: error.stack
+            const errorResponse = handleMarketingEmailError(error, marketingEmailId, logger);
+            return res.status(errorResponse.statusCode).json(errorResponse.body);
+        }
+    }
+
+
+    async trackOpen(req, res) {
+        let transparentGif = Buffer.from(
+            'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+            'base64'
+        );
+
+        try {
+            const { meid, cid, campaign, utm_source, utm_medium, utm_campaign, utm_content, utm_term } = req.query;
+
+            const metadata = extractRequestMetadata(req);
+
+            logger.info('Email opened', {
+                marketingEmailId: meid,
+                contactId: cid,
+                campaignId: campaign,
+                metadata,
+                timestamp: new Date().toISOString()
             });
 
-            // Determine appropriate status code based on error type
-            let statusCode = 500;
-            let errorCode = 'MARKETING_EMAIL_SEND_ERROR';
+            const token = await payloadService.generateAdminToken();
+            const marketingEmail = await getMarketingEmailById(token, meid);
 
-            if (error.code === 'MARKETING_EMAIL_NOT_FOUND') {
-                statusCode = 404;
-                errorCode = error.code;
-            } else if (error.code === 'EMAIL_ACCOUNT_NOT_FOUND') {
-                statusCode = 404;
-                errorCode = error.code;
-            } else if (error.code === 'VALIDATION_ERROR') {
-                statusCode = 400;
-                errorCode = error.code;
+            const createdOpenEvent = await createTrackingEvent(token, 'OPEN', {
+                marketingEmailId: meid,
+                contactId: cid,
+                campaignId: campaign,
+                companyId: marketingEmail?.company_id,
+                senderEmail: marketingEmail?.from_email || null,
+                emailSubject: marketingEmail?.subject || null,
+                metadata,
+                utmParams: {
+                    utm_source: utm_source || 'marketing_email',
+                    utm_medium: utm_medium || null,
+                    utm_campaign: utm_campaign || null,
+                    utm_content: utm_content || null,
+                    utm_term: utm_term || null
+                }
+            });
+
+            console.log('Created open event:', createdOpenEvent);
+        } catch (error) {
+            logger.error('Error tracking email open', {
+                error: error.message,
+                stack: error.stack
+            });
+        } finally {
+            // Always send the transparent 1x1 pixel
+            res.setHeader('Content-Type', 'image/gif');
+            res.setHeader('Content-Length', transparentGif.length);
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+            res.setHeader('Pragma', 'no-cache');
+            res.send(transparentGif);
+        }
+    }
+
+
+    async trackClick(req, res) {
+        try {
+            const { meid, cid, campaign, url, utm_source, utm_medium, utm_campaign, utm_content, utm_term } = req.query;
+
+            if (!url) {
+                return res.status(400).json({
+                    success: false,
+                    error: {
+                        code: 'MISSING_URL',
+                        message: 'Destination URL is required'
+                    }
+                });
             }
 
-            return res.status(statusCode).json({
+            const metadata = extractRequestMetadata(req);
+
+            logger.info('Email link clicked', {
+                marketingEmailId: meid,
+                contactId: cid,
+                campaignId: campaign,
+                destinationUrl: url,
+                metadata,
+                timestamp: new Date().toISOString()
+            });
+
+            payloadService.generateAdminToken()
+                .then(async (token) => {
+                    const marketingEmail = await getMarketingEmailById(token, meid);
+                    
+                    const createdClickEvent = await createTrackingEvent(token, 'CLICK', {
+                        marketingEmailId: meid,
+                        contactId: cid,
+                        campaignId: campaign,
+                        companyId: marketingEmail?.company_id,
+                        senderEmail: marketingEmail?.from_email || null,
+                        emailSubject: marketingEmail?.subject || null,
+                        clickedUrl: decodeURIComponent(url),
+                        metadata,
+                        utmParams: {
+                            utm_source: utm_source || 'marketing_email',
+                            utm_medium: utm_medium || null,
+                            utm_campaign: utm_campaign || null,
+                            utm_content: utm_content || null,
+                            utm_term: utm_term || null
+                        }
+                    });
+
+                    console.log('Created click event:', createdClickEvent);
+                })
+                .catch((error) => {
+                    logger.error('Failed to record CLICK event', {
+                        error: error.message,
+                        marketingEmailId: meid,
+                        contactId: cid
+                    });
+                });
+
+            // Decode the URL and redirect
+            const destinationUrl = decodeURIComponent(url);
+
+            // Redirect to the actual destination
+            return res.redirect(302, destinationUrl);
+        } catch (error) {
+            logger.error('Error tracking email click', {
+                error: error.message,
+                stack: error.stack,
+                query: req.query
+            });
+
+            return res.status(500).json({
                 success: false,
                 error: {
-                    code: errorCode,
-                    message: error.message || 'Failed to send marketing email'
+                    code: 'CLICK_TRACKING_ERROR',
+                    message: 'Failed to track click and redirect'
                 }
             });
         }

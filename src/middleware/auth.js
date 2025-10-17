@@ -43,6 +43,7 @@ export const authenticateToken = async (req, res, next) => {
 
         req.user = user;
         req.userId = user._id;
+        req.payloadToken = token;
         logger.info(`[Authorized] ${user.email}`);
         next();
     } catch (error) {

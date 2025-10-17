@@ -22,6 +22,7 @@ export const config = {
     // Server configuration
     PORT: parseInt(process.env.PORT || "3000"),
     NODE_ENV: process.env.NODE_ENV || "development",
+    APP_BASE_URL: process.env.APP_BASE_URL || `http://localhost:${process.env.PORT}`,
 
     // Database configuration
     MONGODB_URI:
