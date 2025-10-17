@@ -3,8 +3,6 @@ import { payloadService } from "../services/payload.js";
 import { EmailService } from "../services/EmailService.js";
 import { EmailConfig } from "../models/Email.js";
 import logger from "../utils/logger.js";
-import fs from "fs/promises";
-import path from "path";
 import { config } from "../config/index.js";
 import { UAParser } from "ua-parser-js";
 
@@ -86,14 +84,16 @@ export const getCampaignById = async (payloadToken, campaignId) => {
 }
 
 
-export const sendMarketingEmail = async (marketingEmail, contact, campaign, emailAccountId, payloadToken) => {
+export const sendMarketingEmail = async (marketingEmail, contact, campaign) => {
     try {
+        // Replace placeholders in HTML with contact data
         const personalizedHtml = personalizeHtml(
             marketingEmail.email_body_html,
             marketingEmail.preview_text,
             contact
         );
 
+        // Insert tracking pixel and replace anchor tags with tracking URLs
         const htmlWithTracking = insertTrackingParams(
             personalizedHtml,
             marketingEmail,
@@ -101,7 +101,7 @@ export const sendMarketingEmail = async (marketingEmail, contact, campaign, emai
             campaign
         );
 
-        // Send email using EmailService
+        // Send email using SMTP (nodemailer)
         const sendRequest = {
             to: [{ address: contact.email, name: contact.name || contact.email }],
             subject: marketingEmail.subject,
@@ -113,25 +113,7 @@ export const sendMarketingEmail = async (marketingEmail, contact, campaign, emai
             replyTo: marketingEmail.reply_to ? [{ address: marketingEmail.reply_to }] : undefined,
         };
 
-        const result = await emailService.sendEmail(emailAccountId, sendRequest);
-
-        // Record SENT event in tracking database
-        if (result.success && payloadToken) {
-            await createTrackingEvent(payloadToken, 'SENT', {
-                marketingEmailId: marketingEmail.id,
-                contactId: contact._id,
-                campaignId: campaign?.id,
-                companyId: contact.company || null,
-                senderEmail: marketingEmail.from_email,
-                emailSubject: marketingEmail.subject,
-                messageId: result.data?.messageId || result.data?.id || null,
-                utmParams: {
-                    utm_source: 'marketing_email',
-                    utm_medium: 'email',
-                    utm_campaign: campaign?.name || null
-                }
-            });
-        }
+        const result = await emailService.sendEmailUsingSmtp(sendRequest);
 
         return {
             success: true,

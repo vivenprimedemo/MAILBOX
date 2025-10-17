@@ -27,31 +27,17 @@ export class MarketingEmailService {
                 throw error;
             }
 
-            // Fetch email account configuration
-            const emailAccount = await getEmailAccount(marketingEmail.from_email);
-
-            if (!emailAccount) {
-                logger.error('Email account not found', { fromEmail: marketingEmail.from_email });
-                const error = new Error(`Email account not found for ${marketingEmail.from_email}`);
-                error.code = 'EMAIL_ACCOUNT_NOT_FOUND';
-                throw error;
-            }
-
             // Fetch recipients
             const contacts = await getRecipients(payloadToken, marketingEmail);
 
             // Fetch campaign
             const campaign  = await getCampaignById(payloadToken, marketingEmail.campaign_id);
 
-            logger.info('Marketing email total contacts', { contactCount: contacts.length });
-
             // Send emails to all contacts
             const sendStats = await this.sendEmailsInBatches(
                 marketingEmail,
                 contacts,
                 campaign,
-                emailAccount._id.toString(),
-                payloadToken
             );
 
             // Calculate processing time
@@ -112,7 +98,7 @@ export class MarketingEmailService {
         }
     }
 
-    async sendEmailsInBatches(marketingEmail, contacts, campaign, emailAccountId, payloadToken) {
+    async sendEmailsInBatches(marketingEmail, contacts, campaign) {
         let sent = 0, failed = 0, delivered = 0;
         const errors = [];
         const sendResults = [];
@@ -132,8 +118,6 @@ export class MarketingEmailService {
                             marketingEmail,
                             contact,
                             campaign,
-                            emailAccountId,
-                            payloadToken
                         );
 
                         if (result.success) {

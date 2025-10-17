@@ -1,4 +1,4 @@
-import { provider_config_map } from '../config/index.js';
+import { config, provider_config_map } from '../config/index.js';
 import { inbox } from '../helpers/index.js';
 import { clearInboxCache, getCache, setCache } from '../lib/redis.js';
 import { Email, EmailConfig } from '../models/Email.js';
@@ -6,6 +6,7 @@ import { GmailProvider } from '../providers/GmailProvider.js';
 import { IMAPProvider } from '../providers/IMAPProvider.js';
 import { OutlookProvider } from '../providers/OutlookProvider.js';
 import logger from '../utils/logger.js';
+import nodemailer from 'nodemailer';
 
 export class EmailService {
     providers = new Map();
@@ -847,5 +848,98 @@ export class EmailService {
         }
 
         return provider.getSignature();
+    }
+
+    /**
+     * Send email using SMTP (nodemailer) - primarily for marketing emails
+     * @param {Object} emailRequest - Email request object
+     * @param {Array<Object>} emailRequest.to - Array of recipients {address, name}
+     * @param {string} emailRequest.subject - Email subject
+     * @param {string} emailRequest.bodyHtml - HTML body content
+     * @param {string} [emailRequest.bodyText] - Plain text body (optional)
+     * @param {Object} emailRequest.from - Sender info {address, name}
+     * @param {Array<Object>} [emailRequest.replyTo] - Reply-to addresses (optional)
+     * @param {Array<Object>} [emailRequest.cc] - CC recipients (optional)
+     * @param {Array<Object>} [emailRequest.bcc] - BCC recipients (optional)
+     * @param {Array<Object>} [emailRequest.attachments] - Attachments (optional)
+     * @returns {Promise<Object>} Send result with messageId
+     */
+    async sendEmailUsingSmtp(emailRequest) {
+        try {
+            // Validate SMTP configuration
+            if (!config.SMTP_HOST || !config.SMTP_USER || !config.SMTP_PASSWORD) {
+                const error = new Error('SMTP configuration is incomplete. Please check SMTP_HOST, SMTP_USER, and SMTP_PASSWORD environment variables.');
+                error.code = 'SMTP_CONFIG_MISSING';
+                throw error;
+            }
+
+            // Create nodemailer transporter
+            const transporter = nodemailer.createTransport({
+                host: config.SMTP_HOST,
+                port: config.SMTP_PORT,
+                secure: config.SMTP_SECURE,
+                auth: {
+                    user: config.SMTP_USER,
+                    pass: config.SMTP_PASSWORD,
+                },
+                logger: false,
+                debug: false,
+            });
+
+            // Verify transporter configuration
+            await transporter.verify();
+            logger.info('SMTP transporter verified successfully');
+
+            // Format recipients
+            const formatRecipients = (recipients) => {
+                if (!recipients || recipients.length === 0) return undefined;
+                return recipients.map(r =>
+                    r.name ? `"${r.name}" <${r.address}>` : r.address
+                ).join(', ');
+            };
+
+            // Build email options
+            const mailOptions = {
+                from: emailRequest.from.name
+                    ? `"${emailRequest.from.name}" <${config.SMTP_USER_EMAIL}>`
+                    : emailRequest.from.address,
+                to: formatRecipients(emailRequest.to),
+                subject: emailRequest.subject,
+                html: emailRequest.bodyHtml,
+                text: emailRequest.bodyText || undefined,
+                cc: formatRecipients(emailRequest.cc),
+                bcc: formatRecipients(emailRequest.bcc),
+                replyTo: formatRecipients(emailRequest.replyTo),
+                attachments: emailRequest.attachments || undefined,
+            };
+
+            const info = await transporter.sendMail(mailOptions);
+
+            return {
+                success: true,
+                data: {
+                    messageId: info.messageId,
+                    accepted: info.accepted,
+                    rejected: info.rejected,
+                    response: info.response
+                },
+                metadata: {
+                    provider: 'smtp',
+                    timestamp: new Date()
+                }
+            };
+        } catch (error) {
+            logger.error('Error sending email via SMTP', {
+                error: error.message,
+                stack: error.stack,
+                to: emailRequest.to,
+                subject: emailRequest.subject
+            });
+
+            const smtpError = new Error(`Failed to send email via SMTP: ${error.message}`);
+            smtpError.code = 'SMTP_SEND_ERROR';
+            smtpError.originalError = error;
+            throw smtpError;
+        }
     }
 }

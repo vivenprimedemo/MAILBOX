@@ -99,7 +99,15 @@ export const config = {
         useTLS: process.env.REDIS_USE_TLS === 'true' // default false
     },
 
-    cache: process.env.CACHE === 'true'
+    cache: process.env.CACHE === 'true',
+
+    // SMTP Configuration (for sending marketing emails)
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: parseInt(process.env.SMTP_PORT) || 587,
+    SMTP_SECURE: process.env.SMTP_SECURE === 'true' || false,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+    SMTP_USER_EMAIL: process.env.SMTP_USER_EMAIL,
 };
 
 export const provider_config_map = {
