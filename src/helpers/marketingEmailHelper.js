@@ -341,7 +341,6 @@ export const createTrackingEvent = async (payloadToken, eventType, data) => {
             event_type: eventType,
             marketing_email_id: marketingEmailId,
             contact: contactId,
-            campaign: campaignId,
             company: companyId,
             sender_email: senderEmail,
             email_subject: emailSubject,
@@ -397,6 +396,97 @@ export const createTrackingEvent = async (payloadToken, eventType, data) => {
         return { success: false, error: error.message };
     }
 };
+
+/**
+ * Check if a contact has previously performed a specific tracking event
+ * @param {string} payloadToken - PayloadCMS auth token
+ * @param {string} eventType - Event type (OPEN, CLICK, etc.)
+ * @param {string} marketingEmailId - Marketing email ID
+ * @param {string} contactId - Contact ID
+ * @returns {Promise<boolean>} - Returns true if contact has previously performed this event
+ */
+export const hasContactTrackedEvent = async (payloadToken, eventType, marketingEmailId, contactId) => {
+    try {
+        const existingEvent = await commonService.fetch({
+            payloadToken,
+            collection: 'tracking_emails',
+            condition: {
+                marketing_email_id: marketingEmailId,
+                contact: contactId,
+                event_type: eventType
+            },
+            single: true,
+            fields: ['contact', 'email_subject']
+        })
+
+        return existingEvent?.success && existingEvent?.data?._id;
+    } catch (error) {
+        logger.error('Error checking existing tracking event', {
+            error: error.message,
+            eventType,
+            marketingEmailId,
+            contactId
+        });
+        return false;
+    }
+};
+
+
+/**
+ * Increment unique tracking count in marketing_emails collection
+ * @param {string} payloadToken - PayloadCMS auth token
+ * @param {string} marketingEmailId - Marketing email ID
+ * @param {string} fieldName - Field name to increment ('opens' or 'clicks')
+ * @returns {Promise<boolean>} - Returns true if increment was successful
+ */
+export const incrementUniqueTrackingCount = async (payloadToken, marketingEmailId, fieldName) => {
+    try {
+        // Fetch current marketing email to get current count
+        const marketingEmail = await getMarketingEmailById(payloadToken, marketingEmailId);
+
+        if (!marketingEmail) {
+            logger.error('Marketing email not found for tracking increment', { marketingEmailId });
+            return false;
+        }
+
+        const currentCount = marketingEmail.tracking?.[fieldName] || 0;
+        const newCount = currentCount + 1;
+
+        // Update the tracking count
+        const updateData = {
+            tracking: {
+                ...marketingEmail.tracking,
+                [fieldName]: newCount
+            }
+        };
+
+        const result = await payloadService.update(
+            payloadToken,
+            'marketing_emails',
+            marketingEmailId,
+            updateData
+        );
+
+        console.log("Incremented unique tracking count", result?.message , result?.doc?.id);
+
+            logger.info('Successfully incremented unique tracking count', {
+                marketingEmailId,
+                fieldName,
+                previousCount: currentCount,
+                newCount
+            });
+            return true;s
+    } catch (error) {
+        logger.error('Error incrementing unique tracking count', {
+            error: error.message,
+            marketingEmailId,
+            fieldName,
+            stack: error.stack
+        });
+        return false;
+    }
+};
+
 
 export const handleMarketingEmailError = (error, marketingEmailId, logger) => {
     logger.error('Marketing email send request failed', {
