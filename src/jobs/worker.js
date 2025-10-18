@@ -15,7 +15,7 @@ export default class WorkerManager {
 
     createWorker(queueName, processorFn) {
         const worker = new Worker(queueName, processorFn, {
-            connection: config.redis,
+            connection: config.connection,
             concurrency: 5,
         });
 

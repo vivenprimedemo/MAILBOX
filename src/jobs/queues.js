@@ -12,7 +12,7 @@ export default class QueueManager {
 
     getQueue(queueName) {
         if (!this.queues[queueName]) {
-            this.queues[queueName] = new Queue(queueName, { connection: config.redis });
+            this.queues[queueName] = new Queue(queueName, { connection: config.connection });
             console.log(`📦 Queue initialized: ${queueName}`);
         }
         return this.queues[queueName];
