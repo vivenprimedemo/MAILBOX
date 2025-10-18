@@ -102,8 +102,8 @@ export const config = {
     connection: {
         host: process.env.REDIS_HOST || "127.0.0.1", // default to localhost
         port: parseInt(process.env.REDIS_PORT) || 6379, // default to 6379
-        password: process.env.REDIS_PASSWORD || null, // default to null
-        tls: {}
+        // password: process.env.REDIS_PASSWORD || null, // default to null
+        // tls: {}
         // clientName: process.env.REDIS_CLIENT_NAME || 'mailbox-valkey-client',
         // requestTimeout: parseInt(process.env.REDIS_REQUEST_TIMEOUT) || 500, // default 500ms
         // useTLS: process.env.REDIS_USE_TLS === 'true' // default false
