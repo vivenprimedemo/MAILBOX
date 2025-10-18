@@ -15,6 +15,10 @@ import {
 import { startWorker } from './queues/workers/marketingEmailWorker.js';
 import logger from './utils/logger.js';
 
+import WorkerManager from './jobs/worker.js';
+import jobs from './jobs/index.js';
+
+
 class EmailClientServer {
     app;
     port;
@@ -26,6 +30,8 @@ class EmailClientServer {
         this.port = config.PORT;
         this.database = Database.getInstance();
         this.worker = null;
+        this.workerManager = new WorkerManager();
+        this.jobs = jobs;
 
         this.initializeMiddleware();
         this.initializeRoutes();
@@ -188,6 +194,7 @@ class EmailClientServer {
             // Initialize Valkey cache connection
             await getValkeyClient();
 
+            this.workerManager.startAllWorkers();
             // Start marketing email worker
             // try {
             //     this.worker = await startWorker();
@@ -233,7 +240,25 @@ class EmailClientServer {
         logger.info('Starting graceful shutdown...');
 
         try {
-            // Close worker
+            // Close workers first
+            if (this.workerManager) {
+                try {
+                    await this.workerManager.shutdown();
+                    logger.info('BullMQ workers closed');
+                } catch (workerError) {
+                    logger.error('Error closing BullMQ workers:', workerError);
+                }
+            }
+
+            // Close queues
+            try {
+                await this.jobs.shutdown();
+                logger.info('BullMQ queues closed');
+            } catch (queueError) {
+                logger.error('Error closing BullMQ queues:', queueError);
+            }
+
+            // Close marketing worker
             // if (this.worker) {
             //     try {
             //         await this.worker.close();
