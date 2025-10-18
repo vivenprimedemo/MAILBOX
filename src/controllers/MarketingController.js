@@ -1,6 +1,6 @@
 import marketingEmailService from '../services/MarketingEmailService.js';
 import logger from '../utils/logger.js';
-import { createTrackingEvent, extractRequestMetadata, getMarketingEmailById, handleMarketingEmailError } from '../helpers/marketingEmailHelper.js';
+import { createTrackingEvent, extractRequestMetadata, getMarketingEmailById, handleMarketingEmailError, hasContactTrackedEvent, incrementUniqueTrackingCount } from '../helpers/marketingEmailHelper.js';
 import { payloadService } from '../services/payload.js';
 
 class MarketingController {
@@ -44,6 +44,10 @@ class MarketingController {
             });
 
             const token = await payloadService.generateAdminToken();
+
+            // Check if this contact has previously opened this email (before creating the new event)
+            const hasOpenedBefore = await hasContactTrackedEvent(token, 'OPEN', meid, cid);
+
             const marketingEmail = await getMarketingEmailById(token, meid);
 
             const createdOpenEvent = await createTrackingEvent(token, 'OPEN', {
@@ -63,7 +67,13 @@ class MarketingController {
                 }
             });
 
-            console.log('Created open event:', createdOpenEvent);
+            // Increment unique opens count only if this is the first time this contact opened the email
+            if (!hasOpenedBefore && createdOpenEvent.success) {
+                await incrementUniqueTrackingCount(token, meid, 'opens');
+                logger.info('Unique open count incremented', marketingEmail?.name);
+            } else if (hasOpenedBefore) {
+                logger.info('Contact has already clicked this email - not incrementing unique count', marketingEmail?.name);
+            }
         } catch (error) {
             logger.error('Error tracking email open', {
                 error: error.message,
@@ -105,10 +115,14 @@ class MarketingController {
                 timestamp: new Date().toISOString()
             });
 
+            // Process tracking asynchronously (don't block redirect)
             payloadService.generateAdminToken()
                 .then(async (token) => {
+                    // Check if this contact has previously clicked this email (before creating the new event)
+                    const hasClickedBefore = await hasContactTrackedEvent(token, 'CLICK', meid, cid);
+
                     const marketingEmail = await getMarketingEmailById(token, meid);
-                    
+
                     const createdClickEvent = await createTrackingEvent(token, 'CLICK', {
                         marketingEmailId: meid,
                         contactId: cid,
@@ -127,7 +141,13 @@ class MarketingController {
                         }
                     });
 
-                    console.log('Created click event:', createdClickEvent);
+                    // Increment unique clicks count only if this is the first time this contact clicked the email
+                    if (!hasClickedBefore && createdClickEvent.success) {
+                        await incrementUniqueTrackingCount(token, meid, 'clicks');
+                        logger.info('Unique click count incremented', marketingEmail?.name);
+                    } else if (hasClickedBefore) {
+                        logger.info('Contact has already clicked this email - not incrementing unique count', marketingEmail?.name);
+                    }
                 })
                 .catch((error) => {
                     logger.error('Failed to record CLICK event', {
