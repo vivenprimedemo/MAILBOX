@@ -15,10 +15,6 @@ import {
 import { startWorker } from './queues/workers/marketingEmailWorker.js';
 import logger from './utils/logger.js';
 
-import WorkerManager from './jobs/worker.js';
-import jobs from './jobs/index.js';
-
-
 class EmailClientServer {
     app;
     port;
@@ -30,8 +26,6 @@ class EmailClientServer {
         this.port = config.PORT;
         this.database = Database.getInstance();
         this.worker = null;
-        this.workerManager = new WorkerManager();
-        this.jobs = jobs;
 
         this.initializeMiddleware();
         this.initializeRoutes();
@@ -194,16 +188,6 @@ class EmailClientServer {
             // Initialize Valkey cache connection
             await getValkeyClient();
 
-            this.workerManager.startAllWorkers();
-            // Start marketing email worker
-            // try {
-            //     this.worker = await startWorker();
-            //     logger.info('Marketing email worker started successfully');
-            // } catch (workerError) {
-            //     logger.error('Failed to start marketing email worker:', workerError);
-            //     // Continue server startup even if worker fails
-            // }
-
             // Start server
             this.app.listen(this.port, () => {
                 logger.info(`Email Client Server is running on port ${this.port}`);
@@ -240,34 +224,6 @@ class EmailClientServer {
         logger.info('Starting graceful shutdown...');
 
         try {
-            // Close workers first
-            if (this.workerManager) {
-                try {
-                    await this.workerManager.shutdown();
-                    logger.info('BullMQ workers closed');
-                } catch (workerError) {
-                    logger.error('Error closing BullMQ workers:', workerError);
-                }
-            }
-
-            // Close queues
-            try {
-                await this.jobs.shutdown();
-                logger.info('BullMQ queues closed');
-            } catch (queueError) {
-                logger.error('Error closing BullMQ queues:', queueError);
-            }
-
-            // Close marketing worker
-            // if (this.worker) {
-            //     try {
-            //         await this.worker.close();
-            //         logger.info('Marketing email worker closed');
-            //     } catch (workerError) {
-            //         logger.error('Error closing worker:', workerError);
-            //     }
-            // }
-
             // Close Valkey cache connection
             await closeValkeyClient();
             logger.info('Valkey cache connection closed');
