@@ -16,7 +16,7 @@ export const emailProcesses = {
     }) {
         try {
             const contacts = await payloadService.find(payloadToken, 'contacts', {
-                queryParams: [`where[email][equals]=${contactEmailAddress}`],
+                queryParams: [`where[email][equals]=${normalizeEmail(contactEmailAddress)}`],
                 depth: 0
             })
 
