@@ -24,9 +24,12 @@ export const emailProcesses = {
                 return contacts?.[0];
             }
 
+            //split name and last name from the email addresswe have create the first name and last name from the email address
+            const { firstName, lastName } = normalizeName(contactName, contactEmailAddress);
             const contactPayload = {
-                email: contactEmailAddress,
-                first_name: contactName || contactEmailAddress?.split('@')[0],
+                email: normalizeEmail(contactEmailAddress),
+                first_name: firstName,
+                last_name: lastName,
                 crm_tenant: [emailConfig?.company_id],
             };
 
@@ -446,4 +449,19 @@ export const emailProcesses = {
             return null;
         }
     },
+}
+
+export function normalizeEmail(email) {
+    if (!email) return '';
+    return email.toString().toLowerCase().replace(/\s/g, '');
+}
+
+export function normalizeName(name , email) {
+    const nameFromEmail = email?.split('@')[0];
+    const firstName = name?.split(' ')[0] || nameFromEmail?.split('.')[0] || email?.split('@')[0];
+    const lastName = name?.split(' ')[1] || nameFromEmail?.split('.')[1] || '';
+    return {
+        firstName,
+        lastName
+    }
 }
