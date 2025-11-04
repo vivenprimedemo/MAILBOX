@@ -139,6 +139,7 @@ export class OutlookProvider extends BaseEmailProvider {
 
         const folders = await this.graphClient.api('/me/mailFolders')
             .top(100)
+            .expand('childFolders')
             .get();
 
         return folders?.value;

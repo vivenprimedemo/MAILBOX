@@ -151,14 +151,88 @@ export class GmailProvider extends BaseEmailProvider {
     async getFolders(request = {}) {
         try {
             const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
-            const folders = data.labels.map((label) => ({
-                id: label.id,
-                displayName: label.name,
-            }));
-            return folders;
+            return this.transformLabelsToFolders(data.labels);
         } catch (error) {
             throw error;
         }
+    }
+
+    transformLabelsToFolders(labels) {
+        // Sort labels by depth to ensure parents are processed before children
+        const sortedLabels = [...labels].sort((a, b) => {
+            const depthA = (a.name.match(/\//g) || []).length;
+            const depthB = (b.name.match(/\//g) || []).length;
+            return depthA - depthB;
+        });
+
+        const pathMap = new Map();
+        const rootFolders = [];
+
+        for (const label of sortedLabels) {
+            const isNested = label.name.includes('/');
+
+            const folder = {
+                id: label.id,
+                displayName: isNested ? label.name.split('/').pop() : label.name,
+                fullPath: label.name,
+                parentFolderId: null,
+                childFolderCount: 0,
+                unreadItemCount: label.messagesUnread || 0,
+                totalItemCount: label.messagesTotal || 0,
+                sizeInBytes: 0,
+                isHidden: label.labelListVisibility === 'labelHide' || label.messageListVisibility === 'hide',
+                childFolders: []
+            };
+
+            pathMap.set(label.name, folder);
+
+            if (isNested) {
+                const parentPath = label.name.substring(0, label.name.lastIndexOf('/'));
+                const parent = pathMap.get(parentPath);
+
+                if (parent) {
+                    folder.parentFolderId = parent.id;
+                    parent.childFolders.push(folder);
+                    parent.childFolderCount = parent.childFolders.length;
+                } else {
+                    rootFolders.push(folder);
+                }
+            } else {
+                rootFolders.push(folder);
+            }
+        }
+
+        return rootFolders;
+    }
+
+    async resolveLabelId(labelNameOrId) {
+        // If it's already a label ID or system label, return as-is
+        const systemLabels = ['INBOX', 'SENT', 'TRASH', 'DRAFT', 'SPAM', 'STARRED', 'UNREAD', 'IMPORTANT', 'CHAT'];
+
+        if (labelNameOrId.startsWith('Label_') || labelNameOrId.startsWith('CATEGORY_')) {
+            return labelNameOrId;
+        }
+
+        // Check if it's a system label (case-insensitive)
+        const upperLabel = labelNameOrId.toUpperCase();
+        if (systemLabels.includes(upperLabel)) {
+            return upperLabel;
+        }
+
+        // Otherwise, fetch labels and find by name
+        if (!this.cachedLabels) {
+            const data = await this.makeGmailRequest('https://gmail.googleapis.com/gmail/v1/users/me/labels');
+            this.cachedLabels = data.labels;
+        }
+
+        // Find label by exact name match (supports nested labels like "Work/Projects")
+        const label = this.cachedLabels.find(l => l.name === labelNameOrId);
+        if (label) {
+            return label.id;
+        }
+
+        // If still not found, return the original value
+        return labelNameOrId;
     }
 
     mapLabelType(labelId) {
@@ -178,9 +252,17 @@ export class GmailProvider extends BaseEmailProvider {
             const categoryName = folderId.replace('CATEGORY_', '').toLowerCase();
             return `category:${categoryName}`;
         }
-        
-        // Handle standard folders/labels
-        return `in:${folderId}`;
+
+        // System labels that need special handling
+        const systemLabels = ['INBOX', 'SENT', 'TRASH', 'DRAFT', 'SPAM', 'STARRED', 'UNREAD', 'IMPORTANT', 'CHAT'];
+
+        if (systemLabels.includes(folderId.toUpperCase())) {
+            // Use search query syntax for system labels
+            return `in:${folderId.toLowerCase()}`;
+        }
+
+        // For custom labels (Label_xxx), return null to signal we should use labelIds parameter instead
+        return null;
     }
 
     async getEmails(request) {
@@ -189,9 +271,15 @@ export class GmailProvider extends BaseEmailProvider {
 
             let query = this.buildGmailSearchQuery(folderId);
             const params = new URLSearchParams({
-                maxResults: limit.toString(),
-                q: query
+                maxResults: limit.toString()
             });
+
+            // Use labelIds for custom labels, query for system labels/categories
+            if (query) {
+                params.append('q', query);
+            } else {
+                params.append('labelIds', folderId);
+            }
 
             const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
 
@@ -233,36 +321,70 @@ export class GmailProvider extends BaseEmailProvider {
 
             // Build Gmail search query
             let query = this.buildGmailSearchQuery(folderId);
+            let useQueryParam = query !== null;
 
-            // Add search text
-            if (search) {
-                query += ` ${search}`;
-            }
+            // If using query param (system labels/categories), build query string
+            if (useQueryParam) {
+                // Add search text
+                if (search) {
+                    query += ` ${search}`;
+                }
 
-            // Add filters
-            if (from) query += ` from:${from}`;
-            if (to) query += ` to:${to}`;
-            if (subject) query += ` subject:"${subject}"`;
-            if (hasAttachment) query += ' has:attachment';
-            if (isUnread === true) query += ' is:unread';
-            if (isUnread === false) query += ' -is:unread';
-            if (isFlagged === true) query += ' is:starred';
-            if (isFlagged === false) query += ' -is:starred';
+                // Add filters
+                if (from) query += ` from:${from}`;
+                if (to) query += ` to:${to}`;
+                if (subject) query += ` subject:"${subject}"`;
+                if (hasAttachment) query += ' has:attachment';
+                if (isUnread === true) query += ' is:unread';
+                if (isUnread === false) query += ' -is:unread';
+                if (isFlagged === true) query += ' is:starred';
+                if (isFlagged === false) query += ' -is:starred';
 
-            // Add date filters
-            if (dateFrom) {
-                const fromStr = dateFrom.toISOString().split('T')[0];
-                query += ` after:${fromStr}`;
-            }
-            if (dateTo) {
-                const toStr = dateTo.toISOString().split('T')[0];
-                query += ` before:${toStr}`;
+                // Add date filters
+                if (dateFrom) {
+                    const fromStr = dateFrom.toISOString().split('T')[0];
+                    query += ` after:${fromStr}`;
+                }
+                if (dateTo) {
+                    const toStr = dateTo.toISOString().split('T')[0];
+                    query += ` before:${toStr}`;
+                }
+            } else {
+                // For custom labels, build query from filters only (if any)
+                let queryParts = [];
+                if (search) queryParts.push(search);
+                if (from) queryParts.push(`from:${from}`);
+                if (to) queryParts.push(`to:${to}`);
+                if (subject) queryParts.push(`subject:"${subject}"`);
+                if (hasAttachment) queryParts.push('has:attachment');
+                if (isUnread === true) queryParts.push('is:unread');
+                if (isUnread === false) queryParts.push('-is:unread');
+                if (isFlagged === true) queryParts.push('is:starred');
+                if (isFlagged === false) queryParts.push('-is:starred');
+                if (dateFrom) {
+                    const fromStr = dateFrom.toISOString().split('T')[0];
+                    queryParts.push(`after:${fromStr}`);
+                }
+                if (dateTo) {
+                    const toStr = dateTo.toISOString().split('T')[0];
+                    queryParts.push(`before:${toStr}`);
+                }
+
+                if (queryParts.length > 0) {
+                    query = queryParts.join(' ');
+                    useQueryParam = true;
+                }
             }
 
             const params = new URLSearchParams({
-                maxResults: limit.toString(),
-                q: query
+                maxResults: limit.toString()
             });
+
+            if (useQueryParam && query) {
+                params.append('q', query);
+            } else if (!useQueryParam) {
+                params.append('labelIds', folderId);
+            }
 
             const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
 
@@ -346,23 +468,53 @@ export class GmailProvider extends BaseEmailProvider {
 
             // 2️⃣ Build Gmail search query
             let query = this.buildGmailSearchQuery(folderId);
-            if (search) query += ` ${search}`;
-            if (from) query += ` from:${from}`;
-            if (to) query += ` to:${to}`;
-            if (subject) query += ` subject:"${subject}"`;
-            if (hasAttachment) query += ' has:attachment';
-            if (isUnread === true) query += ' is:unread';
-            if (isUnread === false) query += ' -is:unread';
-            if (isFlagged === true) query += ' is:starred';
-            if (isFlagged === false) query += ' -is:starred';
-            if (dateFrom) query += ` after:${dateFrom.toISOString().split('T')[0]}`;
-            if (dateTo) query += ` before:${dateTo.toISOString().split('T')[0]}`;
+            let useQueryParam = query !== null;
+
+            // If using query param (system labels/categories), build query string
+            if (useQueryParam) {
+                if (search) query += ` ${search}`;
+                if (from) query += ` from:${from}`;
+                if (to) query += ` to:${to}`;
+                if (subject) query += ` subject:"${subject}"`;
+                if (hasAttachment) query += ' has:attachment';
+                if (isUnread === true) query += ' is:unread';
+                if (isUnread === false) query += ' -is:unread';
+                if (isFlagged === true) query += ' is:starred';
+                if (isFlagged === false) query += ' -is:starred';
+                if (dateFrom) query += ` after:${dateFrom.toISOString().split('T')[0]}`;
+                if (dateTo) query += ` before:${dateTo.toISOString().split('T')[0]}`;
+            } else {
+                // For custom labels, build query from filters only (if any)
+                let queryParts = [];
+                if (search) queryParts.push(search);
+                if (from) queryParts.push(`from:${from}`);
+                if (to) queryParts.push(`to:${to}`);
+                if (subject) queryParts.push(`subject:"${subject}"`);
+                if (hasAttachment) queryParts.push('has:attachment');
+                if (isUnread === true) queryParts.push('is:unread');
+                if (isUnread === false) queryParts.push('-is:unread');
+                if (isFlagged === true) queryParts.push('is:starred');
+                if (isFlagged === false) queryParts.push('-is:starred');
+                if (dateFrom) queryParts.push(`after:${dateFrom.toISOString().split('T')[0]}`);
+                if (dateTo) queryParts.push(`before:${dateTo.toISOString().split('T')[0]}`);
+
+                if (queryParts.length > 0) {
+                    query = queryParts.join(' ');
+                    useQueryParam = true;
+                }
+            }
 
             // 3️⃣ Build params
             const params = new URLSearchParams({
-                maxResults: limit.toString(),
-                q: query
+                maxResults: limit.toString()
             });
+
+            if (useQueryParam && query) {
+                params.append('q', query);
+            } else if (!useQueryParam) {
+                params.append('labelIds', folderId);
+            }
+
             if (nextPage) params.append('pageToken', nextPage);
 
             // 4️⃣ Call Gmail API for messages
@@ -628,6 +780,7 @@ export class GmailProvider extends BaseEmailProvider {
             const { query = '', from, to, subject, hasAttachment, isUnread, isFlagged, folderId, limit = 50, offset = 0 } = request;
 
             let searchQuery = query;
+            let labelId = null;
 
             if (from) searchQuery += ` from:${from}`;
             if (to) searchQuery += ` to:${to}`;
@@ -635,12 +788,27 @@ export class GmailProvider extends BaseEmailProvider {
             if (hasAttachment) searchQuery += ' has:attachment';
             if (isUnread) searchQuery += ' is:unread';
             if (isFlagged) searchQuery += ' is:starred';
-            if (folderId) searchQuery += ` ${this.buildGmailSearchQuery(folderId)}`;
+
+            if (folderId) {
+                const folderQuery = this.buildGmailSearchQuery(folderId);
+                if (folderQuery) {
+                    searchQuery += ` ${folderQuery}`;
+                } else {
+                    labelId = folderId;
+                }
+            }
 
             const params = new URLSearchParams({
-                q: searchQuery,
                 maxResults: limit.toString()
             });
+
+            if (searchQuery) {
+                params.append('q', searchQuery);
+            }
+
+            if (labelId) {
+                params.append('labelIds', labelId);
+            }
 
             const data = await this.makeGmailRequest(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
 
@@ -780,16 +948,30 @@ export class GmailProvider extends BaseEmailProvider {
     async moveEmails(request) {
         if (request.destinationFolder.toLowerCase() === 'archive' ) {
             await this.updateLabels(request.messageIds, [], ['INBOX']);
-            return { 
+            return {
                 data: { moved: request.messageIds.length },
                 metadata: { provider: 'gmail' }
             };
         }
-            
-        await this.updateLabels(request.messageIds, [request.destinationFolder.toUpperCase()], [request.sourceFolder.toUpperCase()]);
-        return { 
+
+        const destinationLabelId = await this.resolveLabelId(request.destinationFolder);
+
+        // Default: Traditional folder move (remove from source)
+        // Set preserveSourceLabel: true to keep email in both folders
+        const preserveSourceLabel = request.preserveSourceLabel ?? false;
+
+        if (!preserveSourceLabel && request.sourceFolder) {
+            // Traditional "move" - remove source, add destination
+            const sourceLabelId = await this.resolveLabelId(request.sourceFolder);
+            await this.updateLabels(request.messageIds, [destinationLabelId], [sourceLabelId]);
+        } else {
+            // Gmail-style - only add destination label
+            await this.updateLabels(request.messageIds, [destinationLabelId], []);
+        }
+
+        return {
             data: { moved: request.messageIds.length },
-            metadata: { provider: 'gmail' }
+            metadata: { provider: 'gmail', preservedSourceLabel: preserveSourceLabel }
         };
     }
 
