@@ -1058,49 +1058,99 @@ export class OutlookProvider extends BaseEmailProvider {
         return { messageId: 'sent', id: 'sent' };
     }
 
-    async replyToEmail(originalMessageId, options) {
-        if (!this.graphClient) {
-            throw new Error('Not connected to Outlook');
-        }
+    /**
+     * Normalizes recipient addresses to ensure consistent format
+     * @private
+     */
+    normalizeRecipients(recipients) {
+        if (!recipients || recipients.length === 0) return [];
 
-        // Resolve the Outlook message ID if internetMessageId is provided
-        const outlookMessageId = await this.resolveOutlookMessageId(originalMessageId);
+        return recipients.map(addr => ({
+            address: addr?.address,
+            name: addr?.name || addr?.address
+        }));
+    }
 
-        if(options?.to?.length > 0) {
-            options.to = options.to.map(addr => ({
-                address: addr?.address,
-                name: addr?.name || addr?.address
-            }));
-        }
-    
-        let toRecipient = options?.to?.map(addr => ({
+    /**
+     * Converts recipients to Graph API format and removes duplicates
+     * @private
+     */
+    formatRecipientsForGraph(recipients) {
+        if (!recipients || recipients.length === 0) return [];
+
+        const graphRecipients = recipients.map(addr => ({
             emailAddress: {
                 address: addr?.address,
                 name: addr?.name || addr?.address
             }
-        })) || [];
+        }));
 
-        //remove duplicate addresses
-        toRecipient = toRecipient.filter((recipient, index) => 
-            toRecipient.findIndex(r => r.emailAddress.address.toLowerCase() === recipient.emailAddress.address.toLowerCase()) === index
+        // Remove duplicate addresses (case-insensitive)
+        return graphRecipients.filter((recipient, index) =>
+            graphRecipients.findIndex(r =>
+                r.emailAddress.address.toLowerCase() === recipient.emailAddress.address.toLowerCase()
+            ) === index
         );
+    }
 
+    /**
+     * Builds custom headers for reply messages
+     * @private
+     */
+    buildCustomHeaders(options) {
         const customHeaders = [
             {
                 name: config.CUSTOM_HEADERS.CRM_IGNORE,
                 value: (options.ignoreMessage || false).toString()
-            },
+            }
         ];
 
-        options?.associations && customHeaders.push({
-            name: config.CUSTOM_HEADERS.CRM_ASSOCIATIONS,
-            value: JSON.stringify(options.associations)
-        });
+        if (options?.associations) {
+            customHeaders.push({
+                name: config.CUSTOM_HEADERS.CRM_ASSOCIATIONS,
+                value: JSON.stringify(options.associations)
+            });
+        }
+
+        return customHeaders;
+    }
+
+    /**
+     * Converts attachment to Graph API format
+     * @private
+     */
+    formatAttachmentForGraph(attachment) {
+        const graphAttachment = {
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: attachment.filename,
+            contentType: attachment.contentType || 'application/octet-stream',
+            contentBytes: typeof attachment.content === 'string'
+                ? attachment.content
+                : Buffer.isBuffer(attachment.content)
+                    ? attachment.content.toString('base64')
+                    : Buffer.from(attachment.content).toString('base64')
+        };
+
+        // Add inline-specific properties for inline images
+        if (attachment.isInline && attachment.cid) {
+            graphAttachment.contentId = attachment.cid;
+            graphAttachment.isInline = true;
+        }
+
+        return graphAttachment;
+    }
+
+    /**
+     * Builds the complete reply message object
+     * @private
+     */
+    buildReplyMessage(options, toRecipients, ccRecipients, bccRecipients) {
+        const customHeaders = this.buildCustomHeaders(options);
 
         const replyMessage = {
-            comment: options.bodyHtml || options.bodyText  || '',
+            comment: options.bodyHtml || options.bodyText || '',
             message: {
-                toRecipients: toRecipient,
+                toRecipients,
                 singleValueExtendedProperties: [
                     {
                         "id": config.CUSTOM_HEADERS.OUTLOOK,
@@ -1111,29 +1161,44 @@ export class OutlookProvider extends BaseEmailProvider {
             }
         };
 
-        if (options.attachments?.length) {
-            replyMessage.message.attachments = options.attachments.map(attachment => {
-                const graphAttachment = {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    name: attachment.filename,
-                    contentType: attachment.contentType || 'application/octet-stream',
-                    contentBytes: typeof attachment.content === 'string'
-                        ? attachment.content
-                        : Buffer.isBuffer(attachment.content)
-                            ? attachment.content.toString('base64')
-                            : Buffer.from(attachment.content).toString('base64')
-                };
-
-                // Add inline-specific properties for inline images
-                if (attachment.isInline && attachment.cid) {
-                    graphAttachment.contentId = attachment.cid;
-                    graphAttachment.isInline = true;
-                }
-
-                return graphAttachment;
-            });
+        // Add CC recipients if present
+        if (ccRecipients.length > 0) {
+            replyMessage.message.ccRecipients = ccRecipients;
         }
 
+        // Add BCC recipients if present
+        if (bccRecipients.length > 0) {
+            replyMessage.message.bccRecipients = bccRecipients;
+        }
+
+        // Add attachments if present
+        if (options.attachments?.length) {
+            replyMessage.message.attachments = options.attachments.map(attachment =>
+                this.formatAttachmentForGraph(attachment)
+            );
+        }
+
+        return replyMessage;
+    }
+
+    async replyToEmail(originalMessageId, options) {
+        if (!this.graphClient) {
+            throw new Error('Not connected to Outlook');
+        }
+
+        // Resolve the Outlook message ID if internetMessageId is provided
+        const outlookMessageId = await this.resolveOutlookMessageId(originalMessageId);
+
+        // Normalize and format recipients
+        const normalizedTo = this.normalizeRecipients(options?.to);
+        const toRecipients = this.formatRecipientsForGraph(normalizedTo);
+        const ccRecipients = this.formatRecipientsForGraph(options?.cc);
+        const bccRecipients = this.formatRecipientsForGraph(options?.bcc);
+
+        // Build the complete reply message
+        const replyMessage = this.buildReplyMessage(options, toRecipients, ccRecipients, bccRecipients);
+
+        // Send the reply
         const endpoint = options.replyAll ? 'replyAll' : 'reply';
         await this.graphClient.api(`/me/messages/${outlookMessageId}/${endpoint}`).post(replyMessage);
     }

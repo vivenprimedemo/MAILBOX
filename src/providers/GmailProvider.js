@@ -1004,20 +1004,57 @@ export class GmailProvider extends BaseEmailProvider {
             ].map(recipient => ({
                 address: recipient.address,
                 ...(recipient.name && recipient.name.trim() ? { name: recipient.name.trim() } : {})
-            })).filter((recipient, index, self) => 
+            })).filter((recipient, index, self) =>
                 index === self.findIndex(r => r.address.toLowerCase() === recipient.address.toLowerCase())
-            )
-            //remove the to form the option
-            delete options.to;
+            );
 
-            return this.sendEmail({
+            // Handle CC recipients
+            let finalCc = [];
+            if (options?.cc?.length > 0) {
+                finalCc = options.cc.map(recipient => ({
+                    address: recipient.address,
+                    ...(recipient.name && recipient.name.trim() ? { name: recipient.name.trim() } : {})
+                })).filter((recipient, index, self) =>
+                    index === self.findIndex(r => r.address.toLowerCase() === recipient.address.toLowerCase())
+                );
+            }
+
+            // Handle BCC recipients
+            let finalBcc = [];
+            if (options?.bcc?.length > 0) {
+                finalBcc = options.bcc.map(recipient => ({
+                    address: recipient.address,
+                    ...(recipient.name && recipient.name.trim() ? { name: recipient.name.trim() } : {})
+                })).filter((recipient, index, self) =>
+                    index === self.findIndex(r => r.address.toLowerCase() === recipient.address.toLowerCase())
+                );
+            }
+
+            // Remove the to, cc, bcc from the options to avoid duplicates
+            delete options.to;
+            delete options.cc;
+            delete options.bcc;
+
+            const emailPayload = {
                 to: finalTo,
                 subject: originalEmail.subject.trim().startsWith('Re:') ? originalEmail.subject : `Re: ${originalEmail.subject}`,
                 inReplyTo: originalEmail?.messageId,
                 references: [...(originalEmail?.references || []), originalEmail?.messageId].filter(Boolean),
                 threadId: originalEmail?.threadId,
                 ...options
-            });
+            };
+
+            // Add CC if present
+            if (finalCc.length > 0) {
+                emailPayload.cc = finalCc;
+            }
+
+            // Add BCC if present
+            if (finalBcc.length > 0) {
+                emailPayload.bcc = finalBcc;
+            }
+
+            return this.sendEmail(emailPayload);
         } catch (error) {
             throw error;
         }
