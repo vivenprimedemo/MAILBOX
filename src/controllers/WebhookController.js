@@ -125,9 +125,6 @@ export class WebhookController {
         // Create ticket
         let ticket;
         let ticketId = emailMessage?.associations?.tickets?.[0];
-        
-        console.log("TICKET ID:", ticketId);
-
         if(!ticketId){
             ticket = await emailProcesses.handleCreateTicket({
                 payloadToken: accessToken,
@@ -136,15 +133,12 @@ export class WebhookController {
                 direction,
                 emailConfig
             });
-
-            console.log("NEW TICKET CREATED:", ticket);
         } else {
             ticket = await payloadService.find(accessToken, 'tickets', {
                 queryParams: [`where[id][equals]=${ticketId}`],
                 returnSingle: true,
                 depth: 0
             });
-            console.log("EXISTING TICKET FOUND:", ticket);
         }
 
         // Create activity

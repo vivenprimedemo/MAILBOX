@@ -280,14 +280,6 @@ export const emailProcesses = {
     }) {
         try {
 
-            console.table({
-                emailId: emailMessage?.id,
-                subject: emailMessage?.subject,
-                direction: direction,
-            })
-
-            console.log("EMAIL CONFIG IN TICKET CREATION:", emailConfig);
-
             if(direction !== "RECEIVED"){
                 consoleHelper("Skipped Ticket creation as direction is not received | direction : ", direction)
                 return null;
@@ -303,8 +295,6 @@ export const emailProcesses = {
                 depth: 0,
                 returnSingle: true
             })
-
-            console.log("TICKET CONFIG:", ticketConfig);
 
             // Check if ticketConfig is valid and active
             if (!ticketConfig || (Array.isArray(ticketConfig) && ticketConfig.length === 0) || !ticketConfig.is_active) {
@@ -326,9 +316,6 @@ export const emailProcesses = {
             }
 
             const createdTicketRes = await payloadService.create(payloadToken, "tickets", ticketPayload);
-
-
-            console.log("Created Ticket Response:", createdTicketRes);
 
             // Create ticket activity
             const ticketCreateActivity = await emailProcesses.handleCreateTicketActivityLog({
