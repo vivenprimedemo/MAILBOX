@@ -101,3 +101,24 @@ export const clearInboxCache = async (accountId, folderId, nextPage = '') => {
         return false;
     }
 };
+
+/**
+ * Clear ALL inbox cache entries for a specific account
+ * This removes all inbox caches across all folders and pagination states
+ * @param {string} accountId - Account ID
+ * @returns {Promise<number>} Number of cache entries deleted
+ */
+export const clearAccountCache = async (accountId) => {
+    try {
+        if(!config.cache) throw new Error("Cache is disabled. Please enable it in config.");
+
+        // Clear all inbox caches (EMAIL:INBOX:${accountId}:*)
+        const inboxPattern = `EMAIL:INBOX:${accountId}:*`;
+        const deletedCount = await cacheService.deleteByPattern(inboxPattern);
+
+        return deletedCount;
+    } catch (err) {
+        logger.error("Clear account cache error:", err);
+        return 0;
+    }
+};

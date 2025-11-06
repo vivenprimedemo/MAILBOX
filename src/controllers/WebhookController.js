@@ -6,6 +6,7 @@ import logger from "../utils/logger.js";
 import { payloadService } from "../services/payload.js";
 import { emailProcesses } from "./EmailProcesses.js";
 import { DeduplicationManager } from "../helpers/DeduplicationManager.js";
+import { clearAccountCache } from "../lib/redis.js";
 
 // Singleton instance for deduplication
 const deduplicationManager = new DeduplicationManager();
@@ -55,6 +56,18 @@ export class WebhookController {
                 emailConfig,
                 direction
             );
+
+            // Clear account cache after successfully processing the email
+            try {
+                const deletedCount = await clearAccountCache(emailConfigId.toString());
+                logger.info('Webhook: Cleared account cache', {
+                    accountId: emailConfigId.toString(),
+                    provider,
+                    deletedCount
+                });
+            } catch (cacheError) {
+                // Silent fail - don't block webhook processing
+            }
 
         } catch (error) {
             logger.error('Error processing email message', {

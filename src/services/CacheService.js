@@ -436,6 +436,44 @@ export class CacheService {
     }
 
     /**
+     * Delete all keys matching a pattern
+     * @param {string} pattern - Pattern to match (e.g., "EMAIL:INBOX:123:*")
+     * @returns {Promise<number>} Number of deleted keys
+     */
+    async deleteByPattern(pattern) {
+        try {
+            const client = await this._getClient();
+            if (!client) return 0;
+
+            const matchPattern = this.namespace ? `${this.namespace}:${pattern}` : pattern;
+            const keysToDelete = [];
+            let cursor = "0";
+
+            // Use SCAN to find all matching keys
+            do {
+                const result = await client.scan(cursor, { match: matchPattern, count: 100 });
+                cursor = result[0];
+                const keys = result[1];
+
+                if (keys && keys.length > 0) {
+                    keysToDelete.push(...keys);
+                }
+            } while (cursor !== "0");
+
+            // Delete all found keys
+            let deletedCount = 0;
+            if (keysToDelete.length > 0) {
+                deletedCount = await client.del(keysToDelete);
+            }
+
+            return deletedCount;
+        } catch (err) {
+            logger.error('Cache DELETE_BY_PATTERN error', { pattern, error: err.message, stack: err.stack });
+            return 0;
+        }
+    }
+
+    /**
      * Flush all keys in the current namespace (use with caution!)
      * If no namespace, flushes entire cache
      * @returns {Promise<boolean>}
