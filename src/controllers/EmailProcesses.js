@@ -64,7 +64,7 @@ export const emailProcesses = {
                 name: `Email Activity`,
                 event: "interaction",
                 key: direction === "RECEIVED" ? constant.activity.received : constant.activity.sent,
-                performed_by: "66c5775a4cf9070e0378389d", // support's userId
+                // performed_by: "66c5775a4cf9070e0378389d", // support's userId
                 entity_type: "contacts",
                 association: {
                     contacts: associatedContacts?.map(contact => contact?.id),
@@ -241,7 +241,7 @@ export const emailProcesses = {
             name: "Contact Created By Email",
             event: "create",
             key: "contact_created_by_email",
-            performed_by: "66c5775a4cf9070e0378389d", // support's userId
+            // performed_by: "66c5775a4cf9070e0378389d", // support's userId
             company_id: emailConfig?.company_id,
             entity_type: "contacts",
             entity: {
@@ -309,10 +309,16 @@ export const emailProcesses = {
                 crm_tenant: [emailConfig?.company_id],
                 pipeline_id: ticketConfig?.pipeline_id,
                 stage_id: ticketConfig?.stage_id,
+                email: emailMessage?.from?.address,
+                conversation_id: emailMessage?.conversationId,
+                all_internet_message_ids: [ emailMessage?.internetMessageId ],
                 priority: ticketConfig?.priority,
                 assigned_to: ticketConfig?.assigned_to?.[0],
                 source: 'email',
                 direction: direction || 'inbound',
+                last_email_activity: 'ORIGINAL_FROM_CONTACT',
+                in_helpdesk:false,
+                last_email_date: new Date()
             }
 
             const createdTicketRes = await payloadService.create(payloadToken, "tickets", ticketPayload);
@@ -370,7 +376,7 @@ export const emailProcesses = {
                 },
                 association: {
                     tickets: [ticket.id],
-                    contacts: contact?.id ? [contact.id] : []
+                    // contacts: contact?.id ? [contact.id] : []
                 },
                 company_id: companyId,
                 meta_data: {
@@ -449,6 +455,78 @@ export const emailProcesses = {
             return null;
         }
     },
+}
+
+export async function handleIsFromTheSameTicket({
+    payloadToken,
+    emailMessage,
+    direction
+}) {
+    try {
+        const queryParams = [];
+        let orIndex = 0;
+
+        // OR condition: conversationId
+        if (emailMessage?.conversationId) {
+            queryParams.push(`where[or][${orIndex}][conversation_id][equals]=${emailMessage.conversationId}`);
+            orIndex++;
+        }
+
+        // OR condition: inReplyTo header
+        if (emailMessage?.inReplyTo) {
+            queryParams.push(`where[or][${orIndex}][all_internet_message_ids][in]=${emailMessage.inReplyTo}`);
+            orIndex++;
+        }
+
+        // OR conditions: each reference in references array
+        if (emailMessage?.references && Array.isArray(emailMessage.references)) {
+            emailMessage.references.forEach((reference) => {
+                if (reference) {
+                    queryParams.push(`where[or][${orIndex}][all_internet_message_ids][in]=${reference}`);
+                    orIndex++;
+                }
+            });
+        }
+
+        console.log('handleIsFromTheSameTicket query:', { subject: emailMessage?.subject, orConditions: orIndex, queryParams });
+
+        const isFromTheSameTicket = await payloadService.find(payloadToken, 'tickets', {
+            queryParams,
+            depth: 0,
+            returnSingle: true
+        })
+
+        // If ticket found, update it with new internetMessageId, last_activity, and last_email_date
+        if (isFromTheSameTicket && emailMessage?.internetMessageId) {
+            const existingMessageIds = isFromTheSameTicket.all_internet_message_ids || [];
+
+            // Determine last_activity based on direction
+            console.log('handleIsFromTheSameTicket direction:', direction);
+            const lastActivity = direction === 'SENT' ? 'SENT_TO_CONTACT' : 'REPLY_FROM_CONTACT';
+
+            const updatePayload = {
+                last_email_activity: lastActivity,
+                last_email_date: new Date()
+            };
+
+            // Only add internetMessageId if not already present
+            if (!existingMessageIds.includes(emailMessage.internetMessageId)) {
+                updatePayload.all_internet_message_ids = [...existingMessageIds, emailMessage.internetMessageId];
+            }
+
+            await payloadService.update(
+                payloadToken,
+                'tickets',
+                isFromTheSameTicket.id,
+                updatePayload
+            );
+        }
+
+        return isFromTheSameTicket;
+    } catch (error) {
+        console.error('Error handleIsFromTheSameTicket:', error);
+        return null;
+    }
 }
 
 export function normalizeEmail(email) {

@@ -617,12 +617,22 @@ export class OutlookProvider extends BaseEmailProvider {
         const categories = message.categories || [];
         const isPinned = categories.includes(PINNED_CATEGORY);
 
+        // Extract References and In-Reply-To headers from internetMessageHeaders
+        const getHeader = (name) => message?.internetMessageHeaders?.find(header => header?.name?.toLowerCase() === name?.toLowerCase())?.value;
+        const referencesHeader = getHeader('References') || '';
+        const inReplyToHeader = getHeader('In-Reply-To') || '';
+
+        // Parse references into an array (RFC 822 format is space or comma separated)
+        const referencesArray = referencesHeader ? referencesHeader.split(/[,\s]+/).filter(ref => ref.trim()) : [];
+
         return {
             id: message.id,
             messageId: message.internetMessageId || message.id,
             threadId: message.conversationId,
             subject: message.subject || '(No Subject)',
             from: this.parseOutlookAddress(message.from),
+            internetMessageId: message.internetMessageId,
+            conversationId: message.conversationId,
             to: message.toRecipients?.map(addr => this.parseOutlookAddress(addr)) || [],
             cc: message.ccRecipients?.map(addr => this.parseOutlookAddress(addr)) || [],
             bcc: message.bccRecipients?.map(addr => this.parseOutlookAddress(addr)) || [],
@@ -642,8 +652,8 @@ export class OutlookProvider extends BaseEmailProvider {
             isPinned: isPinned,
             folder: folder || 'inbox',
             provider: 'outlook',
-            inReplyTo: null, // Not directly available in Graph API
-            references: [], // Not directly available in Graph API
+            inReplyTo: inReplyToHeader || null,
+            references: referencesArray,
             ignoreMessage: ignoreMessage,
             snippet: message?.bodyPreview,
             associations: associations
@@ -1308,8 +1318,9 @@ export class OutlookProvider extends BaseEmailProvider {
         }
 
         // Get notification URL from environment or use default
-        const baseUrl = config.WEBHOOK_BASE_URL || 'https://6258c1ba9a1d.ngrok-free.app';
-        const notificationUrl = `${baseUrl}/api/webhook/outlook`;
+        const baseUrl = 'https://bd878f4e6f12.ngrok-free.app';
+        const notificationUrl = `https://bd878f4e6f12.ngrok-free.app/api/webhook/outlook`;
+        console.log("notificationUrl", notificationUrl);
 
         // Expiration time (Microsoft Graph max ~70 hours = 4230 minutes)
         const expiration = new Date(Date.now() + 4230 * 60 * 1000).toISOString();

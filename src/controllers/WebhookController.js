@@ -4,7 +4,7 @@ import { EmailConfig } from "../models/Email.js";
 import { provider_config_map } from "../config/index.js";
 import logger from "../utils/logger.js";
 import { payloadService } from "../services/payload.js";
-import { emailProcesses } from "./EmailProcesses.js";
+import { emailProcesses, handleIsFromTheSameTicket } from "./EmailProcesses.js";
 import { DeduplicationManager } from "../helpers/DeduplicationManager.js";
 import { clearAccountCache } from "../lib/redis.js";
 
@@ -135,22 +135,21 @@ export class WebhookController {
             })
         ]);
 
-        // Create ticket
-        let ticket;
-        let ticketId = emailMessage?.associations?.tickets?.[0];
-        if(!ticketId){
+        // Check if email belongs to existing ticket using references/conversationId/internetMessageId
+        let ticket = await handleIsFromTheSameTicket({
+            payloadToken: accessToken,
+            emailMessage,
+            direction
+        });
+
+        if(!ticket){
+            // No existing ticket found, create a new one
             ticket = await emailProcesses.handleCreateTicket({
                 payloadToken: accessToken,
                 emailMessage,
                 associatedContact: contactFrom,
                 direction,
                 emailConfig
-            });
-        } else {
-            ticket = await payloadService.find(accessToken, 'tickets', {
-                queryParams: [`where[id][equals]=${ticketId}`],
-                returnSingle: true,
-                depth: 0
             });
         }
 
