@@ -163,7 +163,7 @@ export class WebhookController {
                 contactTo?.id,
                 ...(emailAssociations?.contacts || [])
             ].filter(Boolean),
-            tickets: ticket ? [ticket?.id] : [],
+            tickets: [ticket?.id, ...(emailAssociations?.tickets || [])].filter(Boolean),
             deals: emailAssociations?.deals || [],
             companies: emailAssociations?.companies || [],
         }
