@@ -325,6 +325,17 @@ export const emailProcesses = {
                 last_email_date: new Date()
             }
 
+            // Check if email belongs to existing ticket using references/conversationId/internetMessageId
+            let ticket = await handleIsFromTheSameTicket({
+                payloadToken: accessToken,
+                emailMessage,
+                direction
+            });
+
+            if(ticket){
+                return ticket;
+            }
+
             const createdTicketRes = await payloadService.create(payloadToken, "tickets", ticketPayload);
 
             // Create ticket activity
