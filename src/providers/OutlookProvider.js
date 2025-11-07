@@ -1318,9 +1318,8 @@ export class OutlookProvider extends BaseEmailProvider {
         }
 
         // Get notification URL from environment or use default
-        const baseUrl = 'https://bd878f4e6f12.ngrok-free.app';
-        const notificationUrl = `https://bd878f4e6f12.ngrok-free.app/api/webhook/outlook`;
-        console.log("notificationUrl", notificationUrl);
+        const baseUrl = config.WEBHOOK_BASE_URL || 'https://6258c1ba9a1d.ngrok-free.app';
+        const notificationUrl = `${baseUrl}/api/webhook/outlook`;
 
         // Expiration time (Microsoft Graph max ~70 hours = 4230 minutes)
         const expiration = new Date(Date.now() + 4230 * 60 * 1000).toISOString();

@@ -419,6 +419,7 @@ export const emailProcesses = {
                             refId: contactId,
                         },
                         associationType: 'ticket_to_contact',
+                        crm_tenant: [companyId],
                     })
                 );
             }
@@ -438,6 +439,7 @@ export const emailProcesses = {
                             refId: companyId,
                         },
                         associationType: 'ticket_to_company',
+                        crm_tenant: [companyId],
                     })
                 );
             }
