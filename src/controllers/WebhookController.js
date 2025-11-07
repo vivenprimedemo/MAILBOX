@@ -135,7 +135,14 @@ export class WebhookController {
             })
         ]);
 
+        // Check if email belongs to existing ticket using references/conversationId/internetMessageId
+        let ticket = await handleIsFromTheSameTicket({
+            payloadToken: accessToken,
+            emailMessage,
+            direction
+        });
 
+        if(!ticket){
             // No existing ticket found, create a new one
             ticket = await emailProcesses.handleCreateTicket({
                 payloadToken: accessToken,
@@ -144,7 +151,7 @@ export class WebhookController {
                 direction,
                 emailConfig
             });
-        
+        }
 
         // Extract associations from email message
         const emailAssociations = emailMessage?.associations || {};
