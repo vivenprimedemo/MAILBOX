@@ -153,12 +153,30 @@ export class WebhookController {
             });
         }
 
+        // Extract associations from email message
+        const emailAssociations = emailMessage?.associations || {};
+
+        // Build associations object with all related entities
+        const associations = {
+            contacts: [
+                contactFrom?.id,
+                contactTo?.id,
+                ...(emailAssociations?.contacts || [])
+            ].filter(Boolean),
+            tickets: ticket ? [ticket?.id] : [],
+            deals: emailAssociations?.deals || [],
+            companies: emailAssociations?.companies || [],
+        }
+
+        console.log("\n\n\n---creating activity with associations:", associations, "\n\n\n");
+
         // Create activity
         const createdActivity = await emailProcesses.handleCreateActivity({
             payloadToken: accessToken,
             emailMessage,
             associatedContacts: [contactFrom, contactTo],
             associatedTickets: ticket ? [ticket] : [],
+            associations,
             direction,
             emailConfig
         });
@@ -168,6 +186,13 @@ export class WebhookController {
             createdTicketId: ticket?.id,
             createdContactFromId: contactFrom?.id,
             createdContactToId: contactTo?.id,
+            associations: {
+                totalContacts: associations.contacts.length,
+                totalDeals: associations.deals.length,
+                totalTickets: associations.tickets.length,
+                deals: associations.deals,
+                contacts: associations.contacts
+            },
             direction,
             emailConfigId: emailConfig?._id?.toString() || emailConfig?.email || emailConfig?.id,
             emailSubject: emailMessage?.subject?.slice(0, 50) + '...',

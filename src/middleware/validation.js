@@ -114,7 +114,9 @@ export const schemas = {
                 cid: Joi.string().optional(),
                 isInline: Joi.boolean().optional()
             })
-        ).optional()
+        ).optional(),
+        ignoreMessage: Joi.boolean().optional(),
+        associations: Joi.object().optional(),
     }).or('bodyText', 'bodyHtml'),
 
     markEmails: Joi.object({

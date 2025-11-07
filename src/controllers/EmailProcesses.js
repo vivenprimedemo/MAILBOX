@@ -56,20 +56,24 @@ export const emailProcesses = {
         emailMessage,
         associatedContacts,
         associatedTickets,
+        associations,
         direction,
         emailConfig,
     }) {
         try {
+            // Use the provided associations if available, otherwise fall back to legacy format
+            const activityAssociations = associations || {
+                contacts: associatedContacts?.map(contact => contact?.id),
+                tickets: associatedTickets?.length > 0 ? associatedTickets?.map(ticket => ticket?.id) : [],
+            };
+
             const activityPayload = {
                 name: `Email Activity`,
                 event: "interaction",
                 key: direction === "RECEIVED" ? constant.activity.received : constant.activity.sent,
                 // performed_by: "66c5775a4cf9070e0378389d", // support's userId
                 entity_type: "contacts",
-                association: {
-                    contacts: associatedContacts?.map(contact => contact?.id),
-                    tickets: associatedTickets?.length > 0 ? associatedTickets?.map(ticket => ticket?.id) : [],
-                },
+                association: activityAssociations,
                 module: {
                     name: "emails"
                 },

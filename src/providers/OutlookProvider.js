@@ -1011,6 +1011,9 @@ export class OutlookProvider extends BaseEmailProvider {
             throw new Error('Not connected to Outlook');
         }
 
+        // Build custom headers
+        const customHeaders = this.buildCustomHeaders(options);
+
         const message = {
             subject: options.subject,
             body: {
@@ -1034,7 +1037,15 @@ export class OutlookProvider extends BaseEmailProvider {
                     address: addr.address,
                     name: addr.name || addr.address
                 }
-            })) || []
+            })) || [],
+            // Add custom headers for CRM integration
+            singleValueExtendedProperties: [
+                {
+                    "id": config.CUSTOM_HEADERS.OUTLOOK,
+                    "value": (options.ignoreMessage || false).toString()
+                }
+            ],
+            internetMessageHeaders: customHeaders
         };
 
         // Add attachments if present
