@@ -321,7 +321,7 @@ export const emailProcesses = {
                 source: 'email',
                 direction: direction || 'inbound',
                 last_email_activity: 'ORIGINAL_FROM_CONTACT',
-                in_helpdesk:false,
+                in_helpdesk: ticketConfig?.in_helpdesk,
                 last_email_date: new Date()
             }
 
