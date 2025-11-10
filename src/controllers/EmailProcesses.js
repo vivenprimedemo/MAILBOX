@@ -322,7 +322,8 @@ export const emailProcesses = {
                 direction: direction || 'inbound',
                 last_email_activity: 'ORIGINAL_FROM_CONTACT',
                 in_helpdesk: ticketConfig?.in_helpdesk,
-                last_email_date: new Date()
+                last_email_date: new Date(),
+                ticket_config_id: ticketConfig?.id,
             }
 
             const createdTicketRes = await payloadService.create(payloadToken, "tickets", ticketPayload);
