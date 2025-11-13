@@ -504,7 +504,7 @@ export async function handleIsFromTheSameTicket({
         })
 
         // If ticket found, update it with new internetMessageId, last_activity, and last_email_date
-        if (isFromTheSameTicket && emailMessage?.internetMessageId) {
+        if (isFromTheSameTicket && isFromTheSameTicket?.id && emailMessage?.internetMessageId) {
             const existingMessageIds = isFromTheSameTicket.all_internet_message_ids || [];
 
             // Determine last_activity based on direction
