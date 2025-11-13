@@ -142,7 +142,7 @@ export class WebhookController {
             direction
         });
 
-        if(!ticket){
+        if(!ticket || !ticket?.id){
             // No existing ticket found, create a new one
             ticket = await emailProcesses.handleCreateTicket({
                 payloadToken: accessToken,
