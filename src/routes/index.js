@@ -6,6 +6,7 @@ import oauthRoutes from './oauth.js';
 import webhookRoutes from './webhooks.js';
 import basicController from '../controllers/BasicController.js';
 import marketingRoutes from './marketing.js';
+import { generalLimiter } from '../middleware/security.js';
 
 const router = Router();
 
@@ -16,14 +17,16 @@ router.get('/', basicController.getApiInfo);
 // Auth Routes
 router.use('/auth', authRoutes);
 router.use('/oauth' , oauthRoutes);
-router.use('/emails', emailRoutes);
-router.use('/calendar', calendarRoutes);
+
+// Protected with general rate limiter
+router.use('/emails', generalLimiter, emailRoutes);
+router.use('/calendar', generalLimiter, calendarRoutes);
 
 // Webhook Routes
 router.use('/webhook' , webhookRoutes)
 
 // Marketing Routes
-router.use('/marketing-email', marketingRoutes);
+router.use('/marketing-email', generalLimiter, marketingRoutes);
 
 // 404 handler for API routes
 router.use('*', basicController.handleNotFound);

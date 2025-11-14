@@ -6,7 +6,6 @@ import apiRoutes from './routes/index.js';
 import { closeValkeyClient, getValkeyClient } from './config/redis.js';
 import {
     securityHeaders,
-    generalLimiter,
     compressionMiddleware,
     corsOptions,
     securityErrorHandler,
@@ -37,7 +36,6 @@ class EmailClientServer {
         this.app.use(securityHeaders);
         this.app.use(securityLogger);
         this.app.use(cors(corsOptions));
-        this.app.use(generalLimiter);
         this.app.use(compressionMiddleware);
 
         // Body parsing middleware

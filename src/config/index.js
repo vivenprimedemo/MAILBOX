@@ -64,7 +64,7 @@ export const config = {
     // Logging configuration
     LOG_LEVEL: process.env.LOG_LEVEL || "info",
 
-    // RATE LIMITING
+    // RATE LIMITING (Legacy - kept for backwards compatibility)
     RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"),
     RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"),
 
@@ -118,6 +118,43 @@ export const config = {
     SMTP_USER: process.env.SMTP_USER,
     SMTP_PASSWORD: process.env.SMTP_PASSWORD,
     SMTP_USER_EMAIL: process.env.SMTP_USER_EMAIL,
+
+    // RATE LIMITING - Centralized Configuration
+    rateLimiting: {
+        // Authentication rate limiter (login, register, refresh token, oauth)
+        auth: {
+            windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes
+            max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || "5"), // 5 attempts
+            message: {
+                success: false,
+                message: 'Too many authentication attempts, please try again later'
+            },
+            standardHeaders: true,
+            legacyHeaders: false,
+        },
+        // General API rate limiter (applied globally to all routes)
+        general: {
+            windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes
+            max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // 100 requests
+            message: {
+                success: false,
+                message: 'Too many requests, please try again later'
+            },
+            standardHeaders: true,
+            legacyHeaders: false,
+        },
+        // Email sending rate limiter (send, reply, forward)
+        emailSend: {
+            windowMs: parseInt(process.env.EMAIL_SEND_RATE_LIMIT_WINDOW_MS || "3600000"), // 1 hour
+            max: parseInt(process.env.EMAIL_SEND_RATE_LIMIT_MAX_REQUESTS || "200"), // 200 emails
+            message: {
+                success: false,
+                message: 'Email sending rate limit exceeded'
+            },
+            standardHeaders: true,
+            legacyHeaders: false,
+        }
+    }
 };
 
 export const provider_config_map = {

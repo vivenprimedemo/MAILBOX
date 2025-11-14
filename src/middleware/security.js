@@ -4,36 +4,18 @@ import compression from 'compression';
 import { config } from '../config/index.js';
 import logger from '../utils/logger.js';
 
-// Rate limiting configurations
+// Rate limiting configurations (using centralized config)
 export const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts per window
-    message: {
-        success: false,
-        message: 'Too many authentication attempts, please try again later'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
+    ...config.rateLimiting.auth
 });
 
 export const generalLimiter = rateLimit({
-    windowMs: config.RATE_LIMIT_WINDOW_MS, // 15 minutes
-    max: config.RATE_LIMIT_MAX_REQUESTS,
-    message: {
-        success: false,
-        message: 'Too many requests, please try again later'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
+    ...config.rateLimiting.general
 });
 
 export const emailSendLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 100, // 100 emails per hour
-    message: {
-        success: false,
-        message: 'Email sending rate limit exceeded'
-    },
+    ...config.rateLimiting.emailSend,
+    // Custom key generator to rate limit per user (IP + userId)
     keyGenerator: (req) => {
         return `${req.ip}-${req.userId || 'anonymous'}`;
     }
