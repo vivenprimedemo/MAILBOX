@@ -320,13 +320,18 @@ export class OutlookCalendarProvider {
      * @returns {Object} Normalized event
      */
     normalizeEvent(event) {
+        // Convert start/end to UTC format
+        const startDateUTC = event.start?.dateTime ? this.convertToUTC(event.start.dateTime, event.start.timeZone) : null;
+        const endDateUTC = event.end?.dateTime ? this.convertToUTC(event.end.dateTime, event.end.timeZone) : null;
+
         return {
             id: event.id,
             title: event.subject || '',
             description: event.body?.content || event.bodyPreview || '',
-            startDate: event.start?.dateTime,
-            endDate: event.end?.dateTime,
-            timeZone: event.start?.timeZone || event.originalStartTimeZone || null,
+            startDate: startDateUTC,
+            endDate: endDateUTC,
+            timeZone: 'UTC', // Always UTC
+            originalTimeZone: event.start?.timeZone || event.originalStartTimeZone || null, // Preserve original timezone
             location: event.location?.displayName || event.location?.uniqueId || '',
             isAllDay: event.isAllDay || false,
             status: this.mapOutlookStatus(event.showAs),
@@ -345,6 +350,47 @@ export class OutlookCalendarProvider {
             updatedAt: event.lastModifiedDateTime,
             provider: 'outlook'
         };
+    }
+
+    /**
+     * Convert date/time to UTC format
+     * @param {string} dateTime - ISO 8601 date string
+     * @param {string} timeZone - Timezone (Windows timezone name)
+     * @returns {string} UTC date string with Z suffix
+     */
+    convertToUTC(dateTime, timeZone) {
+        if (!dateTime) return null;
+
+        try {
+            // If it's already in UTC format (ends with Z), return as is
+            if (dateTime.endsWith('Z')) {
+                return dateTime;
+            }
+
+            // If it's a date-only format (YYYY-MM-DD), return as is (all-day event)
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateTime)) {
+                return dateTime;
+            }
+
+            // Outlook returns datetime without timezone suffix
+            // Parse it and convert to UTC
+            const date = new Date(dateTime);
+
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                return dateTime; // Return original if invalid
+            }
+
+            // Return in UTC format with Z suffix
+            return date.toISOString();
+        } catch (error) {
+            logger.error('Failed to convert Outlook date to UTC', {
+                dateTime,
+                timeZone,
+                error: error.message
+            });
+            return dateTime; // Return original on error
+        }
     }
 
     /**

@@ -287,13 +287,22 @@ export class GmailCalendarProvider {
      * @returns {Object} Normalized event
      */
     normalizeEvent(event) {
+        // Convert start/end to UTC if they have timezone info
+        const startDate = event.start?.dateTime || event.start?.date;
+        const endDate = event.end?.dateTime || event.end?.date;
+
+        // Convert to UTC format (ISO 8601 with Z suffix)
+        const startDateUTC = startDate ? this.convertToUTC(startDate, event.start?.timeZone) : null;
+        const endDateUTC = endDate ? this.convertToUTC(endDate, event.end?.timeZone) : null;
+
         return {
             id: event.id,
             title: event.summary || '',
             description: event.description || '',
-            startDate: event.start?.dateTime || event.start?.date,
-            endDate: event.end?.dateTime || event.end?.date,
-            timeZone: event.start?.timeZone || null,
+            startDate: startDateUTC,
+            endDate: endDateUTC,
+            timeZone: 'UTC', // Always UTC
+            originalTimeZone: event.start?.timeZone || null, // Preserve original timezone
             location: event.location || '',
             isAllDay: !!event.start?.date, // If date field exists (no time), it's all-day
             status: event.status || 'confirmed',
@@ -312,5 +321,45 @@ export class GmailCalendarProvider {
             updatedAt: event.updated,
             provider: 'gmail'
         };
+    }
+
+    /**
+     * Convert date/time to UTC format
+     * @param {string} dateTime - ISO 8601 date string
+     * @param {string} timeZone - IANA timezone name (optional)
+     * @returns {string} UTC date string with Z suffix
+     */
+    convertToUTC(dateTime, timeZone) {
+        if (!dateTime) return null;
+
+        try {
+            // If it's already in UTC format (ends with Z), return as is
+            if (dateTime.endsWith('Z')) {
+                return dateTime;
+            }
+
+            // If it's a date-only format (YYYY-MM-DD), return as is (all-day event)
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateTime)) {
+                return dateTime;
+            }
+
+            // Parse the date and convert to UTC
+            const date = new Date(dateTime);
+
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                return dateTime; // Return original if invalid
+            }
+
+            // Return in UTC format with Z suffix
+            return date.toISOString();
+        } catch (error) {
+            logger.error('Failed to convert date to UTC', {
+                dateTime,
+                timeZone,
+                error: error.message
+            });
+            return dateTime; // Return original on error
+        }
     }
 }
